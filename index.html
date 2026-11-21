@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="SmogShield AI - Minimalist GenAI Urban Smog Defense and IAQ Exposure Mitigation Engine aligned with CPCB and WHO 2021 guidelines.">
+  <title>SmogShield AI — Urban Smog Defense &amp; Exposure Mitigation Engine</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Accessible Skip Link -->
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+
+  <!-- Header Landmark -->
+  <header class="app-header" role="banner">
+    <div class="header-inner container">
+      <div class="brand-group">
+        <div class="brand-logo" aria-hidden="true">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">SmogShield <span class="brand-accent">AI</span></h1>
+          <p class="brand-subtitle">Urban Smog Defense &amp; Community Exposure Mitigation</p>
+        </div>
+      </div>
+
+      <div class="header-badges">
+        <span class="badge badge-cpcb" title="Calculations follow CPCB National Air Quality Index breakpoints">CPCB AQI</span>
+        <span class="badge badge-who" title="Target: WHO 2021 24h PM2.5 guideline of 15 µg/m³">WHO 15 µg/m³</span>
+        
+        <!-- Run Checks Button -->
+        <button id="btn-run-checks" class="btn btn-secondary btn-sm" aria-label="Run automated unit and 10,000 stress checks">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Run Checks</span>
+        </button>
+        <span id="test-status-badge" class="test-badge test-idle" role="status" aria-live="polite">Ready</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Landmark -->
+  <main id="main-content" class="container app-main" role="main">
+    
+    <!-- 1. COMPACT CONFIGURATOR PANEL -->
+    <section class="card config-panel" aria-labelledby="config-heading">
+      <div class="config-header">
+        <h2 id="config-heading" class="section-title">Household &amp; Environmental Profile</h2>
+        <span class="text-muted text-sm">Real-time parameters drive exposure calculations and AI advisories</span>
+      </div>
+
+      <div class="config-grid">
+        <!-- City Preset -->
+        <div class="form-group">
+          <label for="select-city" class="form-label">Location / City Preset</label>
+          <select id="select-city" class="form-select">
+            <option value="delhi">Delhi-NCR (AQI ~382 - Severe)</option>
+            <option value="patna">Patna (AQI ~375 - Severe)</option>
+            <option value="lucknow">Lucknow (AQI ~340 - Very Poor)</option>
+            <option value="kolkata">Kolkata (AQI ~245 - Poor)</option>
+            <option value="mumbai">Mumbai (AQI ~158 - Moderate)</option>
+            <option value="bengaluru">Bengaluru (AQI ~88 - Satisfactory)</option>
+            <option value="custom">Custom AQI Slider</option>
+          </select>
+        </div>
+
+        <!-- Household Composition -->
+        <div class="form-group">
+          <label for="select-household" class="form-label">Household Composition</label>
+          <select id="select-household" class="form-select">
+            <option value="families_kids">Families with Children (High Pediatric Risk)</option>
+            <option value="seniors_multi">Seniors / Multi-Gen (Cardiopulmonary Risk)</option>
+            <option value="commuters">Working Commuters (Transit Corridor Exposure)</option>
+            <option value="rwa_leads">RWA / Community Leads (Society Governance)</option>
+          </select>
+        </div>
+
+        <!-- Primary Commute Mode -->
+        <div class="form-group">
+          <label for="select-commute" class="form-label">Primary Commute Mode</label>
+          <select id="select-commute" class="form-select">
+            <option value="two_wheeler">🛵 Two-Wheeler / Walking (Extreme Direct Exposure)</option>
+            <option value="car">🚗 Petrol / Diesel Car (Cabin Recirculation)</option>
+            <option value="metro">🚇 Metro / Public Transit (Low Emission Shift)</option>
+            <option value="wfh">🏠 Work From Home (Indoor Protection Focus)</option>
+          </select>
+        </div>
+
+        <!-- Indoor Filtration Setup -->
+        <div class="form-group">
+          <label for="select-purifier" class="form-label">Indoor Filtration Setup</label>
+          <select id="select-purifier" class="form-select">
+            <option value="hepa">True-HEPA Air Purifier (Certified H13/H14)</option>
+            <option value="none_diy">No Purifier / DIY Budget (High Infiltration)</option>
+            <option value="split_ac">Split AC / HVAC Recirculation (Coarse Filter)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Live AQI Slider & Severity Status Row -->
+      <div class="aqi-control-wrapper">
+        <div class="aqi-slider-header">
+          <label for="slider-aqi" class="aqi-label">
+            <span>Outdoor Air Quality Index (CPCB AQI)</span>
+            <span class="text-muted text-sm">— drag slider or type exact value</span>
+          </label>
+          <div class="aqi-badge-container">
+            <input type="number" id="input-aqi" class="aqi-num-input" min="0" max="999" value="382" aria-label="AQI numeric input">
+            <span id="aqi-category-pill" class="category-pill pill-severe" role="status" aria-live="polite">Severe</span>
+          </div>
+        </div>
+
+        <div class="slider-track-container">
+          <input
+            type="range"
+            id="slider-aqi"
+            class="aqi-range-slider"
+            min="0"
+            max="500"
+            step="1"
+            value="382"
+            aria-valuemin="0"
+            aria-valuemax="500"
+            aria-valuenow="382"
+            aria-valuetext="AQI 382, Category: Severe"
+          >
+          <div class="slider-scale" aria-hidden="true">
+            <span class="scale-item" style="left: 0%;">0 Good</span>
+            <span class="scale-item" style="left: 10%;">50</span>
+            <span class="scale-item" style="left: 20%;">100</span>
+            <span class="scale-item" style="left: 40%;">200</span>
+            <span class="scale-item" style="left: 60%;">300</span>
+            <span class="scale-item" style="left: 80%;">400</span>
+            <span class="scale-item" style="left: 100%;">500+</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 2. EXPOSURE IMPACT SIMULATOR -->
+    <section class="card simulator-panel" aria-labelledby="simulator-heading">
+      <div class="simulator-header">
+        <div>
+          <h2 id="simulator-heading" class="section-title">Real-Time Exposure Impact Simulator</h2>
+          <p class="section-desc">Quantified exposure delta: Outdoor ambient vs. Unmitigated indoor vs. Active shielded indoor</p>
+        </div>
+        <div class="simulator-actions">
+          <button id="btn-select-recommended" class="btn btn-outline btn-sm" aria-label="Select all recommended mitigation actions for active profile">
+            Adopt Recommended
+          </button>
+          <button id="btn-reset-actions" class="btn btn-ghost btn-sm" aria-label="Reset all adopted mitigations">
+            Reset All
+          </button>
+        </div>
+      </div>
+
+      <!-- Metric Stat Cards -->
+      <div class="metrics-grid">
+        <div class="metric-card metric-outdoor">
+          <div class="metric-header">
+            <span class="metric-title">Outdoor Ambient PM2.5</span>
+            <span id="metric-outdoor-ratio" class="metric-tag tag-danger">15.5x WHO</span>
+          </div>
+          <div class="metric-value-row">
+            <span id="val-outdoor-pm25" class="metric-number">232.4</span>
+            <span class="metric-unit">µg/m³</span>
+          </div>
+          <p class="metric-note">Estimated via CPCB 24-hr piecewise breakpoint interpolation.</p>
+        </div>
+
+        <div class="metric-card metric-unmitigated">
+          <div class="metric-header">
+            <span class="metric-title">Unmitigated Indoor PM2.5</span>
+            <span class="metric-tag tag-warning">Baseline Infiltration</span>
+          </div>
+          <div class="metric-value-row">
+            <span id="val-unmitigated-pm25" class="metric-number">151.1</span>
+            <span class="metric-unit">µg/m³</span>
+          </div>
+          <p class="metric-note">Without active source control &amp; continuous sealing.</p>
+        </div>
+
+        <div class="metric-card metric-protected">
+          <div class="metric-header">
+            <span class="metric-title">Protected Indoor PM2.5</span>
+            <span id="metric-reduction-badge" class="metric-tag tag-success">-68% Exposure</span>
+          </div>
+          <div class="metric-value-row">
+            <span id="val-protected-pm25" class="metric-number">48.3</span>
+            <span class="metric-unit">µg/m³</span>
+          </div>
+          <p class="metric-note" id="metric-protected-note">Derived from NIH RAPIDS HEPA trials (-53% to -60%).</p>
+        </div>
+
+        <div class="metric-card metric-carbon">
+          <div class="metric-header">
+            <span class="metric-title">Daily CO₂e Avoided</span>
+            <span class="metric-tag tag-info">Sustainability</span>
+          </div>
+          <div class="metric-value-row">
+            <span id="val-co2e-avoided" class="metric-number">4.7</span>
+            <span class="metric-unit">kg / day</span>
+          </div>
+          <p class="metric-note">From carpooling, transit shift, electric cooking &amp; anti-idling.</p>
+        </div>
+      </div>
+
+      <!-- Interactive Comparison Chart -->
+      <div class="chart-container" aria-label="Visual bar chart comparing outdoor PM2.5, unmitigated indoor PM2.5, protected indoor PM2.5, and WHO 15 µg/m³ guideline">
+        <div class="chart-legend">
+          <span class="legend-item"><span class="legend-color legend-outdoor"></span> Outdoor Ambient</span>
+          <span class="legend-item"><span class="legend-color legend-unmitigated"></span> Unmitigated Indoor</span>
+          <span class="legend-item"><span class="legend-color legend-protected"></span> Shielded Indoor (Adopted)</span>
+          <span class="legend-item"><span class="legend-color legend-who"></span> WHO 24h Guideline (15 µg/m³)</span>
+        </div>
+        <div class="chart-canvas-wrapper">
+          <canvas id="exposure-chart" height="150" aria-hidden="true"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. THREE ACTIONABLE RECOMMENDATION TRACKS -->
+    <section class="card recommendations-panel" aria-labelledby="tracks-heading">
+      <div class="tracks-header">
+        <div>
+          <h2 id="tracks-heading" class="section-title">Actionable Recommendation Tracks</h2>
+          <p class="section-desc">Toggle verified interventions to simulate immediate exposure mitigation</p>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="filter-controls" role="group" aria-label="Filter recommendations">
+          <button id="filter-all" class="filter-chip active" aria-pressed="true">All Interventions</button>
+          <button id="filter-recommended" class="filter-chip" aria-pressed="false">Profile Recommended Only</button>
+          <button id="filter-adopted" class="filter-chip" aria-pressed="false">Adopted (<span id="adopted-counter">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- ARIA Tabs Navigation -->
+      <div class="tab-list-wrapper" role="tablist" aria-label="Intervention tracks">
+        <button
+          id="tab-routines"
+          class="tab-btn active"
+          role="tab"
+          aria-selected="true"
+          aria-controls="panel-routines"
+          tabindex="0"
+        >
+          <span class="tab-badge">Track 1</span>
+          Low-Emission Daily Routines
+        </button>
+        <button
+          id="tab-iaq"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-iaq"
+          tabindex="-1"
+        >
+          <span class="tab-badge">Track 2</span>
+          Indoor Air Quality (IAQ) Hacks
+        </button>
+        <button
+          id="tab-community"
+          class="tab-btn"
+          role="tab"
+          aria-selected="false"
+          aria-controls="panel-community"
+          tabindex="-1"
+        >
+          <span class="tab-badge">Track 3</span>
+          Sustainable &amp; Community Actions
+        </button>
+      </div>
+
+      <!-- Tab Panels -->
+      <div id="panel-routines" class="tab-panel active" role="tabpanel" aria-labelledby="tab-routines">
+        <div class="actions-container" id="container-routines" data-track="routines">
+          <!-- Dynamically populated via UI module -->
+        </div>
+      </div>
+
+      <div id="panel-iaq" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-iaq">
+        <div class="actions-container" id="container-iaq" data-track="iaq">
+          <!-- Dynamically populated via UI module -->
+        </div>
+      </div>
+
+      <div id="panel-community" class="tab-panel hidden" role="tabpanel" aria-labelledby="tab-community">
+        <div class="actions-container" id="container-community" data-track="community">
+          <!-- Dynamically populated via UI module -->
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. CONTEXT-AWARE GENAI ADVISOR -->
+    <section class="card advisor-panel" aria-labelledby="advisor-heading">
+      <div class="advisor-header">
+        <div class="advisor-title-row">
+          <div class="ai-avatar" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              <line x1="9" y1="10" x2="15" y2="10"></line>
+            </svg>
+          </div>
+          <div>
+            <h2 id="advisor-heading" class="section-title">Context-Aware GenAI Smog Advisor</h2>
+            <p class="section-desc">Grounded in EPA IAQ protocols, NIH RAPIDS trials, and CPCB meteorological science</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Suggestion Prompt Chips -->
+      <div class="prompt-chips-wrapper" role="group" aria-label="Suggested questions for AI advisor">
+        <span class="chips-label">Quick Prompts:</span>
+        <button class="prompt-chip" data-prompt="Can my children play outside this afternoon in this AQI?">
+          🏃 Safe Outdoor Windows?
+        </button>
+        <button class="prompt-chip" data-prompt="How do I build an affordable DIY Corsi-Rosenthal box fan?">
+          📦 Build DIY Corsi-Rosenthal Box
+        </button>
+        <button class="prompt-chip" data-prompt="What should our RWA society do about guard fires and leaf burning?">
+          🍂 RWA Leaf Burning &amp; Guard Heaters
+        </button>
+        <button class="prompt-chip" data-prompt="Why is gas stove cooking dangerous in winter and what can I do?">
+          🍳 Gas Stove vs. Induction Cooking
+        </button>
+        <button class="prompt-chip" data-prompt="What mask is best for my commute and how do I fit test it?">
+          😷 N95 Masking &amp; Fit-Testing
+        </button>
+        <button class="prompt-chip" data-prompt="When should I open windows for fresh air without letting in smog?">
+          🪟 Winter Smog Ventilation Timing
+        </button>
+      </div>
+
+      <!-- Conversation Chat Feed -->
+      <div id="advisor-feed" class="advisor-feed" role="log" aria-live="polite" aria-label="AI advisor conversation feed">
+        <!-- Messages will be securely rendered here -->
+      </div>
+
+      <!-- Chat Input Form -->
+      <form id="advisor-form" class="advisor-input-form" onsubmit="return false;">
+        <label for="advisor-input" class="sr-only">Ask the SmogShield Advisor a question</label>
+        <input
+          type="text"
+          id="advisor-input"
+          class="advisor-text-input"
+          placeholder="Ask about outdoor windows, DIY air purifiers, RWA actions, masks..."
+          maxlength="250"
+          autocomplete="off"
+        >
+        <button type="submit" id="btn-advisor-send" class="btn btn-primary" aria-label="Send message to AI advisor">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          <span>Ask</span>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <!-- Footer Landmark -->
+  <footer class="app-footer container" role="contentinfo">
+    <p>
+      SmogShield AI • Built with deterministic domain logic, strict XSS escaping, and WCAG 2.1 AA accessibility.
+    </p>
+    <p class="footer-sources text-muted text-xs">
+      Scientific references: CPCB National AQI Standards • WHO 2021 Air Quality Guidelines • NIH RAPIDS HEPA Trial (PMC7021209) • US EPA Indoor Air Guidance.
+    </p>
+  </footer>
+
+  <!-- Self-Test Modal / Drawer Dialog -->
+  <div id="test-modal" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title-group">
+          <h2 id="modal-title" class="modal-title">Automated Verification &amp; 10,000 Stress Checks</h2>
+          <span id="modal-test-badge" class="test-badge test-idle">Testing</span>
+        </div>
+        <button id="modal-btn-close" class="btn-icon" aria-label="Close test results modal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="6"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="test-summary-bar">
+          <div class="summary-metric">
+            <span class="summary-label">Status</span>
+            <span id="test-summary-result" class="summary-val text-success">Running...</span>
+          </div>
+          <div class="summary-metric">
+            <span class="summary-label">Unit Checks</span>
+            <span id="test-summary-unit" class="summary-val">0 / 6 Passed</span>
+          </div>
+          <div class="summary-metric">
+            <span class="summary-label">Stress Iterations</span>
+            <span id="test-summary-stress" class="summary-val">0 / 10,000</span>
+          </div>
+          <div class="summary-metric">
+            <span class="summary-label">Execution Time</span>
+            <span id="test-summary-time" class="summary-val">0 ms</span>
+          </div>
+        </div>
+
+        <h3 class="test-log-heading">Execution Telemetry Log</h3>
+        <div id="test-log-container" class="test-log-terminal" role="region" aria-label="Self-test terminal output" tabindex="0">
+          <!-- Test outputs will appear here -->
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="modal-btn-rerun" class="btn btn-secondary btn-sm">Re-Run Suite</button>
+        <button id="modal-btn-dismiss" class="btn btn-primary btn-sm">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="app-core.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
