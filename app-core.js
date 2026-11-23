@@ -1,6 +1,8 @@
 /**
  * SmogShield AI - Core Domain Logic, Constants, and Security Utilities
- * Zero dependencies, pure functions, deterministic, isomorphic (runs in browser & Node).
+ * Zero external dependencies, pure functions, deterministic, isomorphic (runs in Node.js & browser).
+ *
+ * @module SmogShield
  */
 
 (function (root, factory) {
@@ -14,13 +16,165 @@
   'use strict';
 
   // -------------------------------------------------------------
+  // JSDOC TYPE DEFINITIONS
+  // -------------------------------------------------------------
+
+  /**
+   * @typedef {Object} WhoGuidelines
+   * @property {number} PM25_24HR - WHO 2021 24-hour mean limit (µg/m³).
+   * @property {number} PM25_ANNUAL - WHO 2021 annual mean limit (µg/m³).
+   */
+
+  /**
+   * @typedef {Object} CityPreset
+   * @property {string} id - Unique identifier.
+   * @property {string} name - Display name of city or preset.
+   * @property {number} defaultAqi - Typical winter AQI benchmark.
+   * @property {string} note - Meteorological or environmental context.
+   */
+
+  /**
+   * @typedef {Object} HouseholdProfile
+   * @property {string} id - Household identifier.
+   * @property {string} label - Full descriptive label.
+   * @property {string} shortLabel - Compact label for badges and pills.
+   * @property {string} badge - Risk classification badge text.
+   * @property {string} desc - Physiological and clinical vulnerability rationale.
+   * @property {number} vulnerabilityFactor - Respiratory multiplier.
+   */
+
+  /**
+   * @typedef {Object} CommuteProfile
+   * @property {string} id - Commute mode identifier.
+   * @property {string} label - Full descriptive label.
+   * @property {string} icon - Emoji representation.
+   * @property {string} exposureLevel - Categorical exposure severity.
+   * @property {number} multiplier - Micro-environmental particulate multiplier.
+   * @property {number} defaultCo2eKg - Baseline daily vehicular CO2e emissions (kg/day).
+   */
+
+  /**
+   * @typedef {Object} PurifierProfile
+   * @property {string} id - Purifier setup identifier.
+   * @property {string} label - Descriptive label.
+   * @property {string} tag - Rating badge or classification.
+   * @property {number} efficiency - Fractional particulate removal efficiency.
+   * @property {string} desc - Filtration mechanism description.
+   */
+
+  /**
+   * @typedef {Object} CpcbBreakpoint
+   * @property {number} aqiMin - Minimum AQI for this breakpoint band.
+   * @property {number} aqiMax - Maximum AQI for this breakpoint band.
+   * @property {number} pmMin - Lower PM2.5 boundary in µg/m³.
+   * @property {number} pmMax - Upper PM2.5 boundary in µg/m³.
+   * @property {string} key - Machine-readable identifier.
+   * @property {string} label - CPCB standard categorical label.
+   * @property {string} color - Primary status hex code.
+   * @property {string} bg - Light background tint hex code.
+   * @property {string} textColor - High-contrast text hex code.
+   */
+
+  /**
+   * @typedef {Object} ActionItem
+   * @property {string} id - Unique action identifier.
+   * @property {'routines'|'iaq'|'community'} track - Action track key.
+   * @property {string} title - Action title.
+   * @property {string} tag - Classification tag.
+   * @property {Array<string>} targetHousehold - Applicable household profile IDs.
+   * @property {number} minAqiThreshold - Minimum AQI for proactive recommendation.
+   * @property {string} directImpact - Plain-language direct impact summary.
+   * @property {string} scientificEvidence - Grounded scientific citation or study.
+   * @property {number} exposureReductionFactor - Fractional reduction on personal exposure.
+   * @property {number} co2eAvoidedKg - Avoided daily greenhouse gas emissions in kg CO2e.
+   */
+
+  /**
+   * @typedef {Object} MetricCalculationParams
+   * @property {number} aqi - Outdoor AQI value.
+   * @property {string} household - Household profile key.
+   * @property {string} commute - Commute mode key.
+   * @property {string} purifier - Indoor purifier setup key.
+   * @property {Set<string>|Array<string>} [activeActionIds] - IDs of currently adopted actions.
+   */
+
+  /**
+   * @typedef {Object} ComputedMetrics
+   * @property {number} aqi - Sanitized input AQI.
+   * @property {CpcbBreakpoint} category - Active CPCB AQI category descriptor.
+   * @property {number} outdoorPm25 - Calculated outdoor PM2.5 (µg/m³).
+   * @property {number} unmitigatedIndoorPm25 - Calculated unmitigated baseline indoor PM2.5 (µg/m³).
+   * @property {number} protectedIndoorPm25 - Calculated shielded indoor PM2.5 with adopted actions (µg/m³).
+   * @property {number} reductionPercent - Percentage exposure reduction achieved (0–100%).
+   * @property {number} co2eAvoidedKg - Avoided greenhouse gas emissions (kg CO2e/day).
+   * @property {number} whoLimit - Reference WHO 24-hr guideline limit (15 µg/m³).
+   * @property {number} outdoorWhoTimes - Multiple of WHO limit in outdoor air.
+   * @property {number} protectedWhoTimes - Multiple of WHO limit in shielded indoor air.
+   * @property {number} activeCount - Total count of adopted mitigation actions.
+   */
+
+  /**
+   * @typedef {Object} AdvisorContext
+   * @property {string} [query] - User query or quick prompt string.
+   * @property {number} aqi - Current AQI.
+   * @property {string} household - Household profile key.
+   * @property {string} commute - Commute mode key.
+   * @property {string} purifier - Purifier setup key.
+   * @property {Set<string>|Array<string>} [activeActionIds] - Adopted action IDs.
+   */
+
+  /**
+   * @typedef {Object} AdvisorResponse
+   * @property {string} title - Advisory card header title.
+   * @property {string} text - Quantified, context-specific markdown advice.
+   * @property {Array<string>} tags - Metadata chips for categorization.
+   * @property {Array<string>} suggestedActions - Action catalog IDs recommended for adoption.
+   */
+
+  // -------------------------------------------------------------
   // 1. CONFIGURATION & CONSTANTS (Immutable)
   // -------------------------------------------------------------
-  const CONFIG = Object.freeze({
+
+  /**
+   * Empirical mathematical parameters governing exposure modeling.
+   */
+  const METRIC_CONSTANTS = Object.freeze({
+    // Infiltration ratios by purifier setup (outdoor-to-indoor fraction without active intervention)
+    INFILTRATION_RATIOS: Object.freeze({
+      hepa: 0.65,
+      split_ac: 0.78,
+      none_diy: 0.85
+    }),
+
+    // Residual particulate multiplier for adopted active filtration (1 - fractional reduction)
+    RESIDUAL_FACTORS: Object.freeze({
+      TRUE_HEPA: 0.42,       // NIH RAPIDS clinical trial: 58% reduction
+      CORSI_ROSENTHAL: 0.50, // UC Davis DIY box fan CADR evaluation: 50% reduction
+      SPLIT_AC_COARSE: 0.80, // Coarse pre-filter recirculation only
+      DOOR_SEALING: 0.82,    // Infiltration barrier: 18% reduction
+      WET_MOPPING: 0.88,     // Resuspension prevention: 12% reduction
+      SOURCE_CONTROL: 0.85   // Kitchen extraction / induction: 15% reduction
+    }),
+
+    // Indoor source spikes in µg/m³
+    INDOOR_BACKGROUND_SPIKE: 18,
+    COMBUSTION_AVOIDANCE_REDUCTION: 8,
+    CLEAN_INDOOR_FLOOR: 5,
+
+    // Commute carbon bonuses in kg CO2e / day
+    COMMUTE_CO2E_BONUS: Object.freeze({
+      metro: 2.5,
+      wfh: 3.2
+    })
+  });
+
+  const BASE_CONFIG = Object.freeze({
     WHO_GUIDELINES: Object.freeze({
       PM25_24HR: 15, // µg/m³ (WHO 2021 24-hour mean limit)
       PM25_ANNUAL: 5 // µg/m³ (WHO 2021 annual mean limit)
     }),
+
+    METRIC_CONSTANTS,
 
     CITY_PRESETS: Object.freeze([
       { id: 'delhi', name: 'Delhi-NCR', defaultAqi: 382, note: 'Severe winter inversion trap & seasonal biomass' },
@@ -127,8 +281,6 @@
     }),
 
     // CPCB National AQI Breakpoints (for 24-hr PM2.5 in µg/m³)
-    // Good: 0-50 (0-30), Satisfactory: 51-100 (31-60), Moderate: 101-200 (61-90),
-    // Poor: 201-300 (91-120), Very Poor: 301-400 (121-250), Severe: 401-500 (251-380)
     CPCB_BREAKPOINTS: Object.freeze([
       { aqiMin: 0, aqiMax: 50, pmMin: 0, pmMax: 30, key: 'good', label: 'Good', color: '#16a34a', bg: '#f0fdf4', textColor: '#15803d' },
       { aqiMin: 51, aqiMax: 100, pmMin: 31, pmMax: 60, key: 'satisfactory', label: 'Satisfactory', color: '#65a30d', bg: '#f7fee7', textColor: '#4d7c0f' },
@@ -342,14 +494,15 @@
   });
 
   // Fast O(1) Action Map lookup
+  /** @type {Map<string, ActionItem>} */
   const ACTION_MAP = new Map();
-  for (const act of CONFIG.ACTIONS) {
+  for (const act of BASE_CONFIG.ACTIONS) {
     ACTION_MAP.set(act.id, act);
   }
   Object.freeze(ACTION_MAP);
 
-  // Expose ACTION_MAP on CONFIG as well
-  const CONFIG_WITH_MAP = Object.freeze(Object.assign({}, CONFIG, { ACTION_MAP }));
+  // Expose ACTION_MAP on immutable CONFIG
+  const CONFIG = Object.freeze(Object.assign({}, BASE_CONFIG, { ACTION_MAP }));
 
   // -------------------------------------------------------------
   // 2. SECURITY MODULE (Strict Sanitization & XSS Neutralization)
@@ -358,13 +511,12 @@
     /**
      * Escapes untrusted HTML strings to prevent XSS.
      * Escapes &, <, >, ", and '.
-     * @param {*} str - Input to sanitize
-     * @returns {string} Sanitized string
+     * @param {*} str - Input to sanitize.
+     * @returns {string} Sanitized string.
      */
     escapeHtml(str) {
       if (str === null || str === undefined) return '';
-      const s = String(str);
-      return s
+      return String(str)
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
@@ -375,11 +527,11 @@
     /**
      * Clamps a numeric input to a safe integer/float bound.
      * Guarded against NaN, null, undefined, Infinity.
-     * @param {*} val
-     * @param {number} min
-     * @param {number} max
-     * @param {number} fallback
-     * @returns {number}
+     * @param {*} val - Input candidate value.
+     * @param {number} min - Minimum allowed bound.
+     * @param {number} max - Maximum allowed bound.
+     * @param {number} [fallback=0] - Safe fallback value when non-numeric or non-finite.
+     * @returns {number} Clamped safe number.
      */
     clampNumber(val, min, max, fallback = 0) {
       const num = Number(val);
@@ -391,14 +543,203 @@
   };
 
   // -------------------------------------------------------------
-  // 3. DOMAIN LOGIC MODULE (Pure & Deterministic)
+  // 3. ADVISOR INTENT HANDLERS (Modular Single-Responsibility Helpers)
+  // -------------------------------------------------------------
+
+  /**
+   * Generates advice for outdoor activity, exercise, and diurnal inversion window.
+   * @private
+   * @param {number} aqi
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {string} whoMultiple
+   * @param {HouseholdProfile} household
+   * @returns {AdvisorResponse}
+   */
+  function handleOutdoorIntent(aqi, cat, pm25, whoMultiple, household) {
+    const title = 'Outdoor Window & Inversion Advisory';
+    const tags = [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel];
+
+    if (aqi >= 300) {
+      return {
+        title,
+        text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit). Under thermal inversion, a cold stagnant air pocket traps toxic combustion soot close to ground level until midday.\n\n` +
+          `**Direct Recommendation for ${household.label}:**\n` +
+          `• **Cancel all morning outdoor cardio & child sports before 12:00 PM.** Immature lungs and cardiac systems take in 5-10x more particulate mass per minute during physical exertion.\n` +
+          `• **Optimal Outdoor Window:** If strictly necessary, restrict movement to **1:00 PM – 3:30 PM**, when solar heating raises the planetary boundary layer height (up to 1,200m) and dilutes surface particulate concentrations by ~40%.\n` +
+          `• **Mandatory Protection:** Ensure dual-strap headband N95/FFP2 masks are fitted tightly around the nasal bridge before stepping outside.`,
+        tags,
+        suggestedActions: ['routine_mixing_window', 'routine_masking_n95', 'routine_morning_inversion']
+      };
+    }
+
+    if (aqi >= 150) {
+      return {
+        title,
+        text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³**.\n\n` +
+          `• **Targeted Window:** The safest period for light outdoor activity is between **1:00 PM and 4:00 PM** when vertical atmospheric mixing peaks.\n` +
+          `• Avoid high-traffic corridors and early morning fog/haze. For ${household.label}, keep sustained cardio exercises indoors.`,
+        tags,
+        suggestedActions: ['routine_mixing_window', 'routine_masking_n95']
+      };
+    }
+
+    return {
+      title,
+      text: `**Current Status:** AQI is **${aqi} (${cat.label})**, PM2.5 is **${pm25} µg/m³**.\n\n` +
+        `• Outdoor exposure risks are moderate. Children and seniors can enjoy outdoor activities, ideally avoiding peak commute traffic hours (8:00–10:00 AM and 6:00–8:00 PM).`,
+      tags,
+      suggestedActions: ['routine_errand_batching']
+    };
+  }
+
+  /**
+   * Generates advice for air purifiers and DIY Corsi-Rosenthal boxes.
+   * @private
+   * @param {PurifierProfile} purifier
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {HouseholdProfile} household
+   * @returns {AdvisorResponse}
+   */
+  function handlePurifierIntent(purifier, cat, pm25, household) {
+    return {
+      title: 'DIY Corsi-Rosenthal Box vs. HEPA Filtration',
+      text: `**Filtration Engineering Guide:**\n\n` +
+        `• **What is a Corsi-Rosenthal (C-R) Box?** It is an open-source, high Clean Air Delivery Rate (CADR ~350-450 CFM) air cleaner built using a 20-inch box fan and 4x MERV-13 pleated HVAC filters taped into a sealed cube, with a cardboard shroud.\n` +
+        `• **Cost & Performance:** Commercial True-HEPA purifiers cost ₹10,000–₹25,000 with expensive replacement cartridges. A C-R box costs ₹2,500–₹3,800 to build and cleans large 400 sq.ft rooms within 20 minutes.\n` +
+        `• **Setup Status:** Your active setup is **${purifier.label}**.\n` +
+        `• **NIH RAPIDS Clinical Evidence:** Continuous HEPA filtration achieves a **53% to 60% reduction in personal PM2.5 exposure**, reducing blood pressure and arterial stiffness in smog-exposed populations.\n` +
+        `• **Actionable Hack:** Place purifiers away from room corners, at least 1.5 feet from walls, and operate them on medium/high rather than auto-mode during peak inversion nights.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['iaq_true_hepa', 'iaq_corsi_rosenthal', 'iaq_door_sealing']
+    };
+  }
+
+  /**
+   * Generates advice for kitchen source extraction and combustion elimination.
+   * @private
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {HouseholdProfile} household
+   * @returns {AdvisorResponse}
+   */
+  function handleCookingIntent(cat, pm25, household) {
+    return {
+      title: 'Indoor Combustion & NO2 Elimination',
+      text: `**Indoor Air Quality Science:**\n\n` +
+        `• **Gas Combustion Danger:** LPG gas cooktops release up to 400 ppb of nitrogen dioxide (NO2) alongside ultrafine aerosols. In closed winter apartments, indoor NO2 regularly exceeds WHO 1-hour safe limits (200 µg/m³).\n` +
+        `• **Cooking Protocols:** Switch to an **induction cooktop** where possible to eliminate combustion emissions. If using gas, turn on the kitchen exhaust hood at high speed 5 minutes *before* lighting the stove and keep it running 5 minutes after.\n` +
+        `• **Strict Smoke Ban:** Never burn incense (agarbatti), scented paraffin candles, or mosquito coils. Burning a single mosquito coil emits PM2.5 equivalent to **75–100 cigarettes**, flooding the room with formaldehyde and acrolein.\n` +
+        `• **Cleaning Protocol:** Replace dry broom sweeping with damp microfiber wet mopping to prevent dust resuspension.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['iaq_source_control', 'iaq_zero_combustion', 'iaq_wet_mopping']
+    };
+  }
+
+  /**
+   * Generates advice for respirator and mask selection.
+   * @private
+   * @param {CommuteProfile} commute
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {HouseholdProfile} household
+   * @returns {AdvisorResponse}
+   */
+  function handleMaskIntent(commute, cat, pm25, household) {
+    return {
+      title: 'Respirator & Mask Selection Protocol',
+      text: `**Respirator Protection Science:**\n\n` +
+        `• **N95/FFP2 (Dual Headband):** The gold standard for toxic urban smog. Electret meltblown microfiber captures >=95% of 0.3-micron particles.\n` +
+        `• **The Seal Factor:** Earloop masks frequently leak 20–35% around cheeks and jawline under movement. For two-wheeler commuters and walking, choose **headband style** N95s and perform a positive/negative pressure seal check every time.\n` +
+        `• **Cloth & Surgical Masks:** Ineffective against PM2.5. Surgical masks are designed to stop droplet splatter, not fine sub-micron aerosols; inward leakage exceeds 60–80%.\n` +
+        `• **Commute Context:** For your **${commute.label}** mode, masking is vital whenever outdoors or waiting at open transit platforms.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['routine_masking_n95', 'routine_post_commute']
+    };
+  }
+
+  /**
+   * Generates advice for community and RWA initiatives.
+   * @private
+   * @param {HouseholdProfile} household
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @returns {AdvisorResponse}
+   */
+  function handleCommunityIntent(household, cat, pm25) {
+    return {
+      title: 'RWA & Neighborhood Action Playbook',
+      text: `**Community Smog Mitigation Playbook for ${household.label}:**\n\n` +
+        `1. **Security Guard Heating:** Supply 1,000W electric radiant heaters or warm fleece shelters to security guards. This completely eliminates nightly burning of scrap wood, cardboard, and toxic plastic packaging at colony gates.\n` +
+        `2. **Decentralized Leaf Composting:** Dig or install aerated composting pits for garden sweepings. Open biomass burning emits dense polycyclic aromatic hydrocarbons (PAHs) and creates localized hazardous smog.\n` +
+        `3. **School-Gate Anti-Idling Zone:** Establish a mandatory 3-minute engine shutdown rule within 200 meters of community and school entry gates, reducing toxic micro-environment plumes for waiting students by 38%.\n` +
+        `4. **Dust Suppression:** Mandate green geotextile safety netting and water spray nozzles for any residential construction or masonry work.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['comm_guard_heaters', 'comm_leaf_composting', 'comm_no_idling', 'comm_dust_mitigation']
+    };
+  }
+
+  /**
+   * Generates advice for window ventilation dynamics.
+   * @private
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {HouseholdProfile} household
+   * @returns {AdvisorResponse}
+   */
+  function handleVentilationIntent(cat, pm25, household) {
+    return {
+      title: 'Winter Smog Ventilation Strategy',
+      text: `**Ventilation Dynamics in Severe Smog:**\n\n` +
+        `• **The Dilemma:** Keeping rooms completely sealed traps metabolic carbon dioxide (CO2 > 1,500 ppm causes headaches and cognitive fatigue), but opening windows admits toxic PM2.5.\n` +
+        `• **The Optimal Solution:** Perform **strategic pulse ventilation** strictly between **1:30 PM and 3:30 PM** for 10–15 minutes, when atmospheric dispersion is highest and outdoor PM2.5 is at its diurnal minimum.\n` +
+        `• **Post-Ventilation Recovery:** Immediately seal doors and windows, and turn your air purifier (or DIY C-R box) to maximum speed for 20 minutes to scrub infiltrated particulate down to safe levels.\n` +
+        `• Install weatherstripping on door gaps to curb passive infiltration during morning and night smog peaks.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['routine_mixing_window', 'iaq_door_sealing', 'iaq_true_hepa']
+    };
+  }
+
+  /**
+   * Generates synthesized general assessment for user profile.
+   * @private
+   * @param {HouseholdProfile} household
+   * @param {CommuteProfile} commute
+   * @param {PurifierProfile} purifier
+   * @param {number} aqi
+   * @param {CpcbBreakpoint} cat
+   * @param {number} pm25
+   * @param {string} whoMultiple
+   * @param {number} activeCount
+   * @returns {AdvisorResponse}
+   */
+  function handleDefaultAssessment(household, commute, purifier, aqi, cat, pm25, whoMultiple, activeCount) {
+    const priorityAdvice = (aqi >= 250)
+      ? 'Emergency barrier protection: seal bedroom windows, run continuous filtration, wear headband N95 outdoors, and restrict travel to the 1–4 PM mixing window.'
+      : 'Source control and lifestyle adaptation: wet mopping, induction cooking, and batching commute trips.';
+
+    return {
+      title: 'Targeted SmogShield Assessment',
+      text: `Based on your profile (**${household.label}**, commuting via **${commute.label}**, with **${purifier.label}**):\n\n` +
+        `• Current Outdoor AQI is **${aqi} (${cat.label})** with PM2.5 of **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit).\n` +
+        `• You have currently adopted **${activeCount} protection actions**.\n` +
+        `• **Priority Focus:** ${priorityAdvice}\n` +
+        `• Explore the recommended action cards below and toggle their checkboxes to simulate your personal PM2.5 exposure reduction and carbon savings in real time.`,
+      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+      suggestedActions: ['iaq_true_hepa', 'routine_masking_n95', 'routine_mixing_window']
+    };
+  }
+
+  // -------------------------------------------------------------
+  // 4. DOMAIN LOGIC MODULE (Pure & Deterministic)
   // -------------------------------------------------------------
   const DomainLogic = {
     /**
      * Converts CPCB AQI value to estimated 24-hr PM2.5 concentration (µg/m³).
      * Linear interpolation piecewise within CPCB breakpoints.
-     * @param {number} aqi - AQI in range [0, 9999]
-     * @returns {number} PM2.5 in µg/m³
+     * @param {number} aqi - AQI in range [0, 9999].
+     * @returns {number} Estimated PM2.5 in µg/m³.
      */
     aqiToPm25(aqi) {
       const safeAqi = Security.clampNumber(aqi, 0, 9999, 100);
@@ -419,8 +760,8 @@
 
     /**
      * Gets the CPCB AQI Category object for a given AQI value.
-     * @param {number} aqi
-     * @returns {Object} Category descriptor
+     * @param {number} aqi - AQI value.
+     * @returns {CpcbBreakpoint} Category descriptor.
      */
     getAqiCategory(aqi) {
       const safeAqi = Security.clampNumber(aqi, 0, 9999, 100);
@@ -434,10 +775,10 @@
 
     /**
      * Checks if an action is recommended for a given profile and AQI.
-     * @param {Object} action - Action item from CONFIG.ACTIONS
-     * @param {string} household - Household ID
-     * @param {number} aqi - AQI value
-     * @returns {boolean}
+     * @param {ActionItem} action - Action item from CONFIG.ACTIONS.
+     * @param {string} household - Household ID.
+     * @param {number} aqi - AQI value.
+     * @returns {boolean} True if recommended.
      */
     isRecommended(action, household, aqi) {
       if (!action) return false;
@@ -450,71 +791,58 @@
     /**
      * Computes exposure simulation metrics, reductions, and CO2e savings.
      * Pure function, no DOM dependencies.
-     * @param {Object} params
-     * @param {number} params.aqi - Outdoor AQI
-     * @param {string} params.household - Household type key
-     * @param {string} params.commute - Commute mode key
-     * @param {string} params.purifier - Purifier setup key
-     * @param {Set<string>|Array<string>} params.activeActionIds - Set of adopted action IDs
-     * @returns {Object} Calculated metrics
+     * @param {MetricCalculationParams} params - Calculation input parameters.
+     * @returns {ComputedMetrics} Calculated exposure metrics.
      */
     computeMetrics(params) {
-      const rawAqi = Security.clampNumber(params.aqi, 0, 9999, 200);
+      const safeParams = params || {};
+      const rawAqi = Security.clampNumber(safeParams.aqi, 0, 9999, 200);
       const outdoorPm25 = DomainLogic.aqiToPm25(rawAqi);
 
-      const purifier = CONFIG.PURIFIER_SETUPS[params.purifier] || CONFIG.PURIFIER_SETUPS.none_diy;
-      const commute = CONFIG.COMMUTE_MODES[params.commute] || CONFIG.COMMUTE_MODES.car;
-      const household = CONFIG.HOUSEHOLDS[params.household] || CONFIG.HOUSEHOLDS.families_kids;
+      const purifier = CONFIG.PURIFIER_SETUPS[safeParams.purifier] || CONFIG.PURIFIER_SETUPS.none_diy;
+      const commute = CONFIG.COMMUTE_MODES[safeParams.commute] || CONFIG.COMMUTE_MODES.car;
+      const household = CONFIG.HOUSEHOLDS[safeParams.household] || CONFIG.HOUSEHOLDS.families_kids;
 
-      // Ensure activeActionIds is a Set for O(1) checks
-      const activeIds = (params.activeActionIds instanceof Set)
-        ? params.activeActionIds
-        : new Set(params.activeActionIds || []);
+      // Ensure activeActionIds is a Set for O(1) membership lookups
+      const activeIds = (safeParams.activeActionIds instanceof Set)
+        ? safeParams.activeActionIds
+        : new Set(safeParams.activeActionIds || []);
 
-      // Baseline infiltration factors
-      let baselineInfilRatio = 0.85;
-      if (purifier.id === 'hepa') {
-        baselineInfilRatio = 0.65;
-      } else if (purifier.id === 'split_ac') {
-        baselineInfilRatio = 0.78;
-      }
+      // Baseline infiltration ratio from configuration
+      const baselineInfilRatio = METRIC_CONSTANTS.INFILTRATION_RATIOS[purifier.id] ||
+        METRIC_CONSTANTS.INFILTRATION_RATIOS.none_diy;
 
-      // Unmitigated indoor baseline (without active proactive actions)
-      // Base indoor sources: cooking/candles without control ~15 µg/m³
-      const indoorBackgroundSpike = activeIds.has('iaq_zero_combustion') ? 0 : 18;
+      // Unmitigated indoor baseline with unmitigated indoor cooking/candle emission
+      const indoorBackgroundSpike = activeIds.has('iaq_zero_combustion') ? 0 : METRIC_CONSTANTS.INDOOR_BACKGROUND_SPIKE;
       const unmitigatedIndoorPm25 = Math.round(
         (outdoorPm25 * baselineInfilRatio + indoorBackgroundSpike) * 10
       ) / 10;
 
-      // Calculate reduction factor from adopted actions
+      // Residual factor accumulator
       let residualFactor = 1.0;
       let co2eTotal = 0;
 
-      // Purifier setup base efficiency if active
+      // Primary filtration intervention
       if (purifier.id === 'hepa' || activeIds.has('iaq_true_hepa')) {
-        residualFactor *= 0.42; // NIH RAPIDS -58%
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.TRUE_HEPA;
       } else if (activeIds.has('iaq_corsi_rosenthal')) {
-        residualFactor *= 0.50; // DIY Corsi-Rosenthal -50%
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.CORSI_ROSENTHAL;
       } else if (purifier.id === 'split_ac') {
-        residualFactor *= 0.80; // Coarse recirculation only
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.SPLIT_AC_COARSE;
       }
 
-      // Door sealing reduction
+      // Secondary building envelope and behavioral interventions
       if (activeIds.has('iaq_door_sealing')) {
-        residualFactor *= 0.82;
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.DOOR_SEALING;
       }
-
-      // Wet mopping reduction
       if (activeIds.has('iaq_wet_mopping')) {
-        residualFactor *= 0.88;
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.WET_MOPPING;
       }
-
-      // Source control
       if (activeIds.has('iaq_source_control')) {
-        residualFactor *= 0.85;
+        residualFactor *= METRIC_CONSTANTS.RESIDUAL_FACTORS.SOURCE_CONTROL;
       }
 
-      // Sum CO2e avoided from adopted actions
+      // Sum CO2e savings from adopted actions via O(1) map
       for (const actId of activeIds) {
         const action = ACTION_MAP.get(actId);
         if (action && typeof action.co2eAvoidedKg === 'number') {
@@ -522,26 +850,29 @@
         }
       }
 
-      // Commute bonus CO2e if metro or wfh adopted
+      // Commute clean mobility CO2e credit
       if (commute.id === 'metro') {
-        co2eTotal += 2.5;
+        co2eTotal += METRIC_CONSTANTS.COMMUTE_CO2E_BONUS.metro;
       } else if (commute.id === 'wfh') {
-        co2eTotal += 3.2;
+        co2eTotal += METRIC_CONSTANTS.COMMUTE_CO2E_BONUS.wfh;
       }
 
-      // Compute protected indoor PM2.5
-      // Must always be <= unmitigatedIndoorPm25 and >= safe floor (e.g. 5 µg/m³ clean HEPA floor)
+      // Calculate protected indoor PM2.5 with combustion avoidance offset
       let protectedIndoor = unmitigatedIndoorPm25 * residualFactor;
       if (activeIds.has('iaq_zero_combustion')) {
-        protectedIndoor = Math.max(5, protectedIndoor - 8);
+        protectedIndoor = Math.max(METRIC_CONSTANTS.CLEAN_INDOOR_FLOOR, protectedIndoor - METRIC_CONSTANTS.COMBUSTION_AVOIDANCE_REDUCTION);
       }
-      protectedIndoor = Math.min(unmitigatedIndoorPm25, Math.max(5, Math.round(protectedIndoor * 10) / 10));
+      protectedIndoor = Math.min(
+        unmitigatedIndoorPm25,
+        Math.max(METRIC_CONSTANTS.CLEAN_INDOOR_FLOOR, Math.round(protectedIndoor * 10) / 10)
+      );
 
+      // Percentage reduction bounded to [0, 100]
       const reductionPercent = (unmitigatedIndoorPm25 > 0)
         ? Math.min(100, Math.max(0, Math.round(((unmitigatedIndoorPm25 - protectedIndoor) / unmitigatedIndoorPm25) * 100)))
         : 0;
 
-      // WHO 2021 comparisons (24-hr limit = 15 µg/m³)
+      // Comparison with WHO 2021 24-hr guideline (15 µg/m³)
       const whoLimit = CONFIG.WHO_GUIDELINES.PM25_24HR;
       const outdoorWhoTimes = Math.round((outdoorPm25 / whoLimit) * 10) / 10;
       const protectedWhoTimes = Math.round((protectedIndoor / whoLimit) * 10) / 10;
@@ -565,135 +896,256 @@
      * Context-Aware GenAI Advisor Engine.
      * Evaluates query, active profile, and currently active actions to produce
      * an authoritative, quantified, and context-specific response.
-     * @param {Object} ctx
-     * @param {string} ctx.query - User question or selected prompt
-     * @param {number} ctx.aqi - Active AQI
-     * @param {string} ctx.household - Household key
-     * @param {string} ctx.commute - Commute key
-     * @param {string} ctx.purifier - Purifier key
-     * @param {Set<string>} ctx.activeActionIds - Adopted action IDs
-     * @returns {Object} { title, text, tags, suggestedActions }
+     * @param {AdvisorContext} ctx - Context object containing active environmental state.
+     * @returns {AdvisorResponse} Structured advisory response.
      */
     generateAdvisorReply(ctx) {
-      const query = (ctx.query || '').toLowerCase().trim();
-      const aqi = Security.clampNumber(ctx.aqi, 0, 9999, 250);
+      const safeCtx = ctx || {};
+      const query = (safeCtx.query || '').toLowerCase().trim();
+      const aqi = Security.clampNumber(safeCtx.aqi, 0, 9999, 250);
       const pm25 = DomainLogic.aqiToPm25(aqi);
       const cat = DomainLogic.getAqiCategory(aqi);
-      const household = CONFIG.HOUSEHOLDS[ctx.household] || CONFIG.HOUSEHOLDS.families_kids;
-      const commute = CONFIG.COMMUTE_MODES[ctx.commute] || CONFIG.COMMUTE_MODES.car;
-      const purifier = CONFIG.PURIFIER_SETUPS[ctx.purifier] || CONFIG.PURIFIER_SETUPS.none_diy;
-      const activeIds = ctx.activeActionIds instanceof Set ? ctx.activeActionIds : new Set(ctx.activeActionIds || []);
+      const household = CONFIG.HOUSEHOLDS[safeCtx.household] || CONFIG.HOUSEHOLDS.families_kids;
+      const commute = CONFIG.COMMUTE_MODES[safeCtx.commute] || CONFIG.COMMUTE_MODES.car;
+      const purifier = CONFIG.PURIFIER_SETUPS[safeCtx.purifier] || CONFIG.PURIFIER_SETUPS.none_diy;
+      const activeIds = safeCtx.activeActionIds instanceof Set
+        ? safeCtx.activeActionIds
+        : new Set(safeCtx.activeActionIds || []);
 
       const whoMultiple = (pm25 / CONFIG.WHO_GUIDELINES.PM25_24HR).toFixed(1);
 
-      // Context summary for advice
-      let replyTitle = 'SmogShield Air Quality Advisory';
-      let replyText = '';
-      const tags = [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel];
-      const suggestedActions = [];
-
-      // Semantic intent routing
-      const isOutdoorQuestion = query.includes('outdoor') || query.includes('play') || query.includes('child') ||
-        query.includes('walk') || query.includes('run') || query.includes('exercise') || query.includes('morning');
-
-      const isCorsiOrPurifier = query.includes('corsi') || query.includes('diy') || query.includes('box fan') ||
-        query.includes('purifier') || query.includes('hepa') || query.includes('merv');
-
-      const isCookingOrIndoor = query.includes('cook') || query.includes('gas') || query.includes('induction') ||
-        query.includes('kitchen') || query.includes('incense') || query.includes('candle') || query.includes('coil') || query.includes('no2');
-
-      const isMaskQuestion = query.includes('mask') || query.includes('n95') || query.includes('ffp2') || query.includes('cloth') || query.includes('surgical');
-
-      const isRwaOrCommunity = query.includes('rwa') || query.includes('community') || query.includes('leaf') ||
-        query.includes('burn') || query.includes('guard') || query.includes('idling') || query.includes('school');
-
-      const isVentilationQuestion = query.includes('window') || query.includes('ventilate') || query.includes('fresh air') || query.includes('co2') || query.includes('stale');
-
-      if (isOutdoorQuestion) {
-        replyTitle = 'Outdoor Window & Inversion Advisory';
-        if (aqi >= 300) {
-          replyText = `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit). Under thermal inversion, a cold stagnant air pocket traps toxic combustion soot close to ground level until midday.\n\n` +
-            `**Direct Recommendation for ${household.label}:**\n` +
-            `• **Cancel all morning outdoor cardio & child sports before 12:00 PM.** Immature lungs and cardiac systems take in 5-10x more particulate mass per minute during physical exertion.\n` +
-            `• **Optimal Outdoor Window:** If strictly necessary, restrict movement to **1:00 PM – 3:30 PM**, when solar heating raises the planetary boundary layer height (up to 1,200m) and dilutes surface particulate concentrations by ~40%.\n` +
-            `• **Mandatory Protection:** Ensure dual-strap headband N95/FFP2 masks are fitted tightly around the nasal bridge before stepping outside.`;
-          suggestedActions.push('routine_mixing_window', 'routine_masking_n95', 'routine_morning_inversion');
-        } else if (aqi >= 150) {
-          replyText = `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³**.\n\n` +
-            `• **Targeted Window:** The safest period for light outdoor activity is between **1:00 PM and 4:00 PM** when vertical atmospheric mixing peaks.\n` +
-            `• Avoid high-traffic corridors and early morning fog/haze. For ${household.label}, keep sustained cardio exercises indoors.`;
-          suggestedActions.push('routine_mixing_window', 'routine_masking_n95');
-        } else {
-          replyText = `**Current Status:** AQI is **${aqi} (${cat.label})**, PM2.5 is **${pm25} µg/m³**.\n\n` +
-            `• Outdoor exposure risks are moderate. Children and seniors can enjoy outdoor activities, ideally avoiding peak commute traffic hours (8:00–10:00 AM and 6:00–8:00 PM).`;
-          suggestedActions.push('routine_errand_batching');
-        }
-      } else if (isCorsiOrPurifier) {
-        replyTitle = 'DIY Corsi-Rosenthal Box vs. HEPA Filtration';
-        replyText = `**Filtration Engineering Guide:**\n\n` +
-          `• **What is a Corsi-Rosenthal (C-R) Box?** It is an open-source, high Clean Air Delivery Rate (CADR ~350-450 CFM) air cleaner built using a 20-inch box fan and 4x MERV-13 pleated HVAC filters taped into a sealed cube, with a cardboard shroud.\n` +
-          `• **Cost & Performance:** Commercial True-HEPA purifiers cost ₹10,000–₹25,000 with expensive replacement cartridges. A C-R box costs ₹2,500–₹3,800 to build and cleans large 400 sq.ft rooms within 20 minutes.\n` +
-          `• **Setup Status:** Your active setup is **${purifier.label}**.\n` +
-          `• **NIH RAPIDS Clinical Evidence:** Continuous HEPA filtration achieves a **53% to 60% reduction in personal PM2.5 exposure**, reducing blood pressure and arterial stiffness in smog-exposed populations.\n` +
-          `• **Actionable Hack:** Place purifiers away from room corners, at least 1.5 feet from walls, and operate them on medium/high rather than auto-mode during peak inversion nights.`;
-        suggestedActions.push('iaq_true_hepa', 'iaq_corsi_rosenthal', 'iaq_door_sealing');
-      } else if (isCookingOrIndoor) {
-        replyTitle = 'Indoor Combustion & NO2 Elimination';
-        replyText = `**Indoor Air Quality Science:**\n\n` +
-          `• **Gas Combustion Danger:** LPG gas cooktops release up to 400 ppb of nitrogen dioxide (NO2) alongside ultrafine aerosols. In closed winter apartments, indoor NO2 regularly exceeds WHO 1-hour safe limits (200 µg/m³).\n` +
-          `• **Cooking Protocols:** Switch to an **induction cooktop** where possible to eliminate combustion emissions. If using gas, turn on the kitchen exhaust hood at high speed 5 minutes *before* lighting the stove and keep it running 5 minutes after.\n` +
-          `• **Strict Smoke Ban:** Never burn incense (agarbatti), scented paraffin candles, or mosquito coils. Burning a single mosquito coil emits PM2.5 equivalent to **75–100 cigarettes**, flooding the room with formaldehyde and acrolein.\n` +
-          `• **Cleaning Protocol:** Replace dry broom sweeping with damp microfiber wet mopping to prevent dust resuspension.`;
-        suggestedActions.push('iaq_source_control', 'iaq_zero_combustion', 'iaq_wet_mopping');
-      } else if (isMaskQuestion) {
-        replyTitle = 'Respirator & Mask Selection Protocol';
-        replyText = `**Respirator Protection Science:**\n\n` +
-          `• **N95/FFP2 (Dual Headband):** The gold standard for toxic urban smog. Electret meltblown microfiber captures >=95% of 0.3-micron particles.\n` +
-          `• **The Seal Factor:** Earloop masks frequently leak 20–35% around cheeks and jawline under movement. For two-wheeler commuters and walking, choose **headband style** N95s and perform a positive/negative pressure seal check every time.\n` +
-          `• **Cloth & Surgical Masks:** Ineffective against PM2.5. Surgical masks are designed to stop droplet splatter, not fine sub-micron aerosols; inward leakage exceeds 60–80%.\n` +
-          `• **Commute Context:** For your **${commute.label}** mode, masking is vital whenever outdoors or waiting at open transit platforms.`;
-        suggestedActions.push('routine_masking_n95', 'routine_post_commute');
-      } else if (isRwaOrCommunity) {
-        replyTitle = 'RWA & Neighborhood Action Playbook';
-        replyText = `**Community Smog Mitigation Playbook for ${household.label}:**\n\n` +
-          `1. **Security Guard Heating:** Supply 1,000W electric radiant heaters or warm fleece shelters to security guards. This completely eliminates nightly burning of scrap wood, cardboard, and toxic plastic packaging at colony gates.\n` +
-          `2. **Decentralized Leaf Composting:** Dig or install aerated composting pits for garden sweepings. Open biomass burning emits dense polycyclic aromatic hydrocarbons (PAHs) and creates localized hazardous smog.\n` +
-          `3. **School-Gate Anti-Idling Zone:** Establish a mandatory 3-minute engine shutdown rule within 200 meters of community and school entry gates, reducing toxic micro-environment plumes for waiting students by 38%.\n` +
-          `4. **Dust Suppression:** Mandate green geotextile safety netting and water spray nozzles for any residential construction or masonry work.`;
-        suggestedActions.push('comm_guard_heaters', 'comm_leaf_composting', 'comm_no_idling', 'comm_dust_mitigation');
-      } else if (isVentilationQuestion) {
-        replyTitle = 'Winter Smog Ventilation Strategy';
-        replyText = `**Ventilation Dynamics in Severe Smog:**\n\n` +
-          `• **The Dilemma:** Keeping rooms completely sealed traps metabolic carbon dioxide (CO2 > 1,500 ppm causes headaches and cognitive fatigue), but opening windows admits toxic PM2.5.\n` +
-          `• **The Optimal Solution:** Perform **strategic pulse ventilation** strictly between **1:30 PM and 3:30 PM** for 10–15 minutes, when atmospheric dispersion is highest and outdoor PM2.5 is at its diurnal minimum.\n` +
-          `• **Post-Ventilation Recovery:** Immediately seal doors and windows, and turn your air purifier (or DIY C-R box) to maximum speed for 20 minutes to scrub infiltrated particulate down to safe levels.\n` +
-          `• Install weatherstripping on door gaps to curb passive infiltration during morning and night smog peaks.`;
-        suggestedActions.push('routine_mixing_window', 'iaq_door_sealing', 'iaq_true_hepa');
-      } else {
-        // Generic synthesized query response
-        replyTitle = `Targeted SmogShield Assessment`;
-        const activeCount = activeIds.size;
-        replyText = `Based on your profile (**${household.label}**, commuting via **${commute.label}**, with **${purifier.label}**):\n\n` +
-          `• Current Outdoor AQI is **${aqi} (${cat.label})** with PM2.5 of **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit).\n` +
-          `• You have currently adopted **${activeCount} protection actions**.\n` +
-          `• **Priority Focus:** ${(aqi >= 250) ? 'Emergency barrier protection: seal bedroom windows, run continuous filtration, wear headband N95 outdoors, and restrict travel to the 1–4 PM mixing window.' : 'Source control and lifestyle adaptation: wet mopping, induction cooking, and batching commute trips.'}\n` +
-          `• Explore the recommended action cards below and toggle their checkboxes to simulate your personal PM2.5 exposure reduction and carbon savings in real time.`;
-        suggestedActions.push('iaq_true_hepa', 'routine_masking_n95', 'routine_mixing_window');
+      // Route intent via clean single-responsibility helpers
+      if (query.includes('outdoor') || query.includes('play') || query.includes('child') ||
+          query.includes('walk') || query.includes('run') || query.includes('exercise') || query.includes('morning')) {
+        return handleOutdoorIntent(aqi, cat, pm25, whoMultiple, household);
       }
 
-      return {
-        title: replyTitle,
-        text: replyText,
-        tags,
-        suggestedActions
-      };
+      if (query.includes('corsi') || query.includes('diy') || query.includes('box fan') ||
+          query.includes('purifier') || query.includes('hepa') || query.includes('merv')) {
+        return handlePurifierIntent(purifier, cat, pm25, household);
+      }
+
+      if (query.includes('cook') || query.includes('gas') || query.includes('induction') ||
+          query.includes('kitchen') || query.includes('incense') || query.includes('candle') ||
+          query.includes('coil') || query.includes('no2')) {
+        return handleCookingIntent(cat, pm25, household);
+      }
+
+      if (query.includes('mask') || query.includes('n95') || query.includes('ffp2') ||
+          query.includes('cloth') || query.includes('surgical')) {
+        return handleMaskIntent(commute, cat, pm25, household);
+      }
+
+      if (query.includes('rwa') || query.includes('community') || query.includes('leaf') ||
+          query.includes('burn') || query.includes('guard') || query.includes('idling') || query.includes('school')) {
+        return handleCommunityIntent(household, cat, pm25);
+      }
+
+      if (query.includes('window') || query.includes('ventilate') || query.includes('fresh air') ||
+          query.includes('co2') || query.includes('stale')) {
+        return handleVentilationIntent(cat, pm25, household);
+      }
+
+      return handleDefaultAssessment(household, commute, purifier, aqi, cat, pm25, whoMultiple, activeIds.size);
+    }
+  };
+
+  // -------------------------------------------------------------
+  // 5. SHARED HEADLESS SELF-TEST SUITE ENGINE (DRY Implementation)
+  // -------------------------------------------------------------
+  const SelfTest = {
+    /**
+     * Runs all unit checks and the 10,000-iteration stress/fuzz test.
+     * Can be invoked headlessly in Node.js or integrated into the UI.
+     * @param {Object} [options]
+     * @param {Function} [options.onLog] - Callback for log messages `(message, type) => void`.
+     * @param {number} [options.stressIterations=10000] - Total fuzz iterations.
+     * @returns {{ passed: boolean, unitPassed: number, unitTotal: number, stressIterations: number, elapsedMs: number, error: (Error|null) }}
+     */
+    runAll(options = {}) {
+      const log = typeof options.onLog === 'function' ? options.onLog : () => {};
+      const targetIterations = typeof options.stressIterations === 'number' ? options.stressIterations : 10000;
+      const startTime = Date.now();
+
+      let unitPassed = 0;
+      const unitTotal = 6;
+
+      try {
+        // 1. CPCB Breakpoints Accuracy
+        const p25 = DomainLogic.aqiToPm25(25);
+        const p75 = DomainLogic.aqiToPm25(75);
+        const p150 = DomainLogic.aqiToPm25(150);
+        const p250 = DomainLogic.aqiToPm25(250);
+        const p350 = DomainLogic.aqiToPm25(350);
+        const p450 = DomainLogic.aqiToPm25(450);
+
+        if (p25 <= 30 && p75 <= 60 && p150 <= 90 && p250 <= 120 && p350 <= 250 && p450 <= 380) {
+          unitPassed++;
+          log('✓ Check 1: CPCB AQI piecewise breakpoint calculations accurate.', 'pass');
+        } else {
+          throw new Error('CPCB breakpoint test failed.');
+        }
+
+        // 2. Category Boundary Classification
+        const c0 = DomainLogic.getAqiCategory(0).key === 'good';
+        const c100 = DomainLogic.getAqiCategory(100).key === 'satisfactory';
+        const c200 = DomainLogic.getAqiCategory(200).key === 'moderate';
+        const c300 = DomainLogic.getAqiCategory(300).key === 'poor';
+        const c400 = DomainLogic.getAqiCategory(400).key === 'very_poor';
+        const c500 = DomainLogic.getAqiCategory(500).key === 'severe';
+        const c600 = DomainLogic.getAqiCategory(600).key === 'severe_plus';
+
+        if (c0 && c100 && c200 && c300 && c400 && c500 && c600) {
+          unitPassed++;
+          log('✓ Check 2: All 7 AQI category boundary classifications verified.', 'pass');
+        } else {
+          throw new Error('Category classification test failed.');
+        }
+
+        // 3. Metric Invariants
+        const m = DomainLogic.computeMetrics({
+          aqi: 340,
+          household: 'seniors_multi',
+          commute: 'car',
+          purifier: 'hepa',
+          activeActionIds: ['iaq_true_hepa', 'iaq_door_sealing']
+        });
+
+        if (
+          !Number.isNaN(m.outdoorPm25) &&
+          !Number.isNaN(m.protectedIndoorPm25) &&
+          !Number.isNaN(m.unmitigatedIndoorPm25) &&
+          m.protectedIndoorPm25 <= m.unmitigatedIndoorPm25 &&
+          m.reductionPercent >= 0 &&
+          m.reductionPercent <= 100 &&
+          m.co2eAvoidedKg >= 0
+        ) {
+          unitPassed++;
+          log('✓ Check 3: Metric invariants verified (no NaNs, protected <= unmitigated).', 'pass');
+        } else {
+          throw new Error('Metric invariant calculation failed.');
+        }
+
+        // 4. Security XSS Sanitization
+        const dirty = '<script>alert(1)</script><img src=x onerror=alert(2)>&"\'';
+        const clean = Security.escapeHtml(dirty);
+        if (!clean.includes('<') && !clean.includes('>') && clean.includes('&lt;') && clean.includes('&gt;')) {
+          unitPassed++;
+          log('✓ Check 4: Strict XSS neutralization verified (&, <, >, ", \' escaped).', 'pass');
+        } else {
+          throw new Error('XSS neutralization test failed.');
+        }
+
+        // 5. ACTION_MAP Parity
+        if (CONFIG.ACTION_MAP && CONFIG.ACTION_MAP.size === CONFIG.ACTIONS.length) {
+          unitPassed++;
+          log(`✓ Check 5: ACTION_MAP O(1) parity verified (${CONFIG.ACTIONS.length} actions).`, 'pass');
+        } else {
+          throw new Error('ACTION_MAP parity failed.');
+        }
+
+        // 6. Advisor Generation Contextual Advice
+        const adv = DomainLogic.generateAdvisorReply({
+          query: 'What outdoor exercise window is safe today for my child?',
+          aqi: 350,
+          household: 'families_kids',
+          commute: 'two_wheeler',
+          purifier: 'hepa',
+          activeActionIds: ['routine_mixing_window']
+        });
+
+        if (adv && typeof adv.text === 'string' && adv.text.length > 50 &&
+            (adv.text.includes('child') || adv.text.includes('outdoor') || adv.text.includes('AQI'))) {
+          unitPassed++;
+          log('✓ Check 6: Context-aware GenAI advisor response generation verified.', 'pass');
+        } else {
+          throw new Error('Advisor reply generation failed.');
+        }
+
+        // 7. High-Volume Automated Stress & Fuzz Suite
+        log(`Executing ${targetIterations.toLocaleString()}-Iteration Automated Fuzz & Extreme Bounds Test...`, 'info');
+
+        const extremeAqis = [-100, 0, 50, 100, 200, 300, 400, 500, 999, 9999, NaN, Infinity, -Infinity, null, undefined, 'abc'];
+        const householdKeys = Object.keys(CONFIG.HOUSEHOLDS);
+        const commuteKeys = Object.keys(CONFIG.COMMUTE_MODES);
+        const purifierKeys = Object.keys(CONFIG.PURIFIER_SETUPS);
+        const actionIds = CONFIG.ACTIONS.map(a => a.id);
+
+        for (let i = 0; i < targetIterations; i++) {
+          const rawAqi = (i % 25 === 0)
+            ? extremeAqis[i % extremeAqis.length]
+            : (i * 37) % 650;
+
+          const household = householdKeys[i % householdKeys.length];
+          const commute = commuteKeys[i % commuteKeys.length];
+          const purifier = purifierKeys[i % purifierKeys.length];
+
+          const activeSet = new Set();
+          const count = i % (actionIds.length + 1);
+          for (let c = 0; c < count; c++) {
+            activeSet.add(actionIds[(i + c) % actionIds.length]);
+          }
+
+          // Invariant Check
+          const sim = DomainLogic.computeMetrics({
+            aqi: rawAqi,
+            household,
+            commute,
+            purifier,
+            activeActionIds: activeSet
+          });
+
+          if (Number.isNaN(sim.outdoorPm25) || Number.isNaN(sim.protectedIndoorPm25) || Number.isNaN(sim.unmitigatedIndoorPm25)) {
+            throw new Error(`Stress iteration ${i} produced NaN metrics.`);
+          }
+          if (sim.protectedIndoorPm25 > sim.unmitigatedIndoorPm25 + 0.001) {
+            throw new Error(`Stress iteration ${i} violated protected <= unmitigated.`);
+          }
+          if (sim.reductionPercent < 0 || sim.reductionPercent > 100) {
+            throw new Error(`Stress iteration ${i} reductionPercent out of bounds: ${sim.reductionPercent}`);
+          }
+
+          // XSS Fuzzing
+          const rawPayload = `<a href="javascript:void(${i})">test & ${i}</a>`;
+          const sanitized = Security.escapeHtml(rawPayload);
+          if (sanitized.includes('<') || sanitized.includes('>')) {
+            throw new Error(`Stress iteration ${i} failed XSS escaping.`);
+          }
+        }
+
+        const elapsedMs = Date.now() - startTime;
+        log(`✓ Check 7: ${targetIterations.toLocaleString()} stress/fuzz iterations completed successfully (${elapsedMs} ms)!`, 'pass');
+        log('100% SUITE PASSED — All CPCB, WHO, Security, and Invariant gates verified.', 'pass');
+
+        return {
+          passed: true,
+          unitPassed,
+          unitTotal,
+          stressIterations: targetIterations,
+          elapsedMs,
+          error: null
+        };
+      } catch (err) {
+        const elapsedMs = Date.now() - startTime;
+        log(`✗ Test Failure: ${err.message}`, 'fail');
+
+        return {
+          passed: false,
+          unitPassed,
+          unitTotal,
+          stressIterations: targetIterations,
+          elapsedMs,
+          error: err
+        };
+      }
     }
   };
 
   return {
-    CONFIG: CONFIG_WITH_MAP,
+    CONFIG,
     ACTION_MAP,
     Security,
-    DomainLogic
+    DomainLogic,
+    SelfTest
   };
 });

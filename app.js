@@ -2,14 +2,22 @@
  * SmogShield AI - Presentation Layer & UI Controller
  * Implements cached DOM, event delegation, requestAnimationFrame batching,
  * accessible keyboard navigation, responsive canvas charting, and SelfTest runner.
+ *
+ * @module SmogShieldUI
  */
 
 (function () {
   'use strict';
 
-  const { CONFIG, Security, DomainLogic } = window.SmogShield;
+  const { CONFIG, Security, DomainLogic, SelfTest } = window.SmogShield;
 
-  // Application State
+  // -------------------------------------------------------------
+  // APPLICATION STATE
+  // -------------------------------------------------------------
+
+  /**
+   * Internal reactive application state.
+   */
   const state = {
     cityId: 'delhi',
     aqi: 382,
@@ -29,7 +37,10 @@
     lastFocusedElement: null
   };
 
-  // DOM Elements Cache
+  /**
+   * Cached DOM Elements.
+   * Populated on initial load by cacheDom().
+   */
   const DOM = {};
 
   /**
@@ -92,7 +103,7 @@
     DOM.btnRunChecks = document.getElementById('btn-run-checks');
     DOM.testStatusBadge = document.getElementById('test-status-badge');
 
-    // Modal DOM
+    // Self-Test Modal Elements
     DOM.testModal = document.getElementById('test-modal');
     DOM.modalTitle = document.getElementById('modal-title');
     DOM.modalTestBadge = document.getElementById('modal-test-badge');
@@ -111,7 +122,7 @@
   // -------------------------------------------------------------
 
   /**
-   * Updates all metrics, chart, and action cards.
+   * Triggers a full UI render pass across metrics, canvas chart, and action cards.
    */
   function renderAll() {
     renderMetrics();
@@ -131,41 +142,138 @@
       activeActionIds: state.activeActionIds
     });
 
-    // Update AQI inputs and pill
-    DOM.sliderAqi.value = state.aqi;
-    DOM.sliderAqi.setAttribute('aria-valuenow', state.aqi);
-    DOM.sliderAqi.setAttribute('aria-valuetext', `AQI ${state.aqi}, Category: ${metrics.category.label}`);
-    DOM.inputAqi.value = state.aqi;
-
-    DOM.aqiCategoryPill.textContent = metrics.category.label;
-    DOM.aqiCategoryPill.className = `category-pill pill-${metrics.category.key}`;
-
-    // Update Metric Values
-    DOM.valOutdoorPm25.textContent = metrics.outdoorPm25.toFixed(1);
-    DOM.valUnmitigatedPm25.textContent = metrics.unmitigatedIndoorPm25.toFixed(1);
-    DOM.valProtectedPm25.textContent = metrics.protectedIndoorPm25.toFixed(1);
-    DOM.valCo2eAvoided.textContent = metrics.co2eAvoidedKg.toFixed(1);
-
-    DOM.metricOutdoorRatio.textContent = `${metrics.outdoorWhoTimes}x WHO`;
-    DOM.metricReductionBadge.textContent = `-${metrics.reductionPercent}% Exposure`;
-
-    if (metrics.reductionPercent >= 50) {
-      DOM.metricReductionBadge.className = 'metric-tag tag-success';
-    } else if (metrics.reductionPercent >= 25) {
-      DOM.metricReductionBadge.className = 'metric-tag tag-warning';
-    } else {
-      DOM.metricReductionBadge.className = 'metric-tag tag-danger';
+    // Update AQI controls and category pill
+    if (DOM.sliderAqi) {
+      DOM.sliderAqi.value = state.aqi;
+      DOM.sliderAqi.setAttribute('aria-valuenow', state.aqi);
+      DOM.sliderAqi.setAttribute('aria-valuetext', `AQI ${state.aqi}, Category: ${metrics.category.label}`);
+    }
+    if (DOM.inputAqi) {
+      DOM.inputAqi.value = state.aqi;
     }
 
-    if (state.activeActionIds.has('iaq_true_hepa')) {
-      DOM.metricProtectedNote.textContent = 'True-HEPA active (NIH RAPIDS trial: -53% to -60% personal exposure).';
-    } else if (state.activeActionIds.has('iaq_corsi_rosenthal')) {
-      DOM.metricProtectedNote.textContent = 'DIY Corsi-Rosenthal active (MERV-13 high-CADR particle removal).';
-    } else {
-      DOM.metricProtectedNote.textContent = 'Enable HEPA or DIY box-fan filtration to reach sub-15 µg/m³ WHO target.';
+    if (DOM.aqiCategoryPill) {
+      DOM.aqiCategoryPill.textContent = metrics.category.label;
+      DOM.aqiCategoryPill.className = `category-pill pill-${metrics.category.key}`;
     }
 
-    DOM.adoptedCounter.textContent = state.activeActionIds.size;
+    // Update Numerical Metric Values
+    if (DOM.valOutdoorPm25) DOM.valOutdoorPm25.textContent = metrics.outdoorPm25.toFixed(1);
+    if (DOM.valUnmitigatedPm25) DOM.valUnmitigatedPm25.textContent = metrics.unmitigatedIndoorPm25.toFixed(1);
+    if (DOM.valProtectedPm25) DOM.valProtectedPm25.textContent = metrics.protectedIndoorPm25.toFixed(1);
+    if (DOM.valCo2eAvoided) DOM.valCo2eAvoided.textContent = metrics.co2eAvoidedKg.toFixed(1);
+
+    // Update Ratio & Reduction Badges
+    if (DOM.metricOutdoorRatio) {
+      DOM.metricOutdoorRatio.textContent = `${metrics.outdoorWhoTimes}x WHO`;
+    }
+    if (DOM.metricReductionBadge) {
+      DOM.metricReductionBadge.textContent = `-${metrics.reductionPercent}% Exposure`;
+      if (metrics.reductionPercent >= 50) {
+        DOM.metricReductionBadge.className = 'metric-tag tag-success';
+      } else if (metrics.reductionPercent >= 25) {
+        DOM.metricReductionBadge.className = 'metric-tag tag-warning';
+      } else {
+        DOM.metricReductionBadge.className = 'metric-tag tag-danger';
+      }
+    }
+
+    // Explanatory Note based on active primary filtration
+    if (DOM.metricProtectedNote) {
+      if (state.activeActionIds.has('iaq_true_hepa')) {
+        DOM.metricProtectedNote.textContent = 'True-HEPA active (NIH RAPIDS trial: -53% to -60% personal exposure).';
+      } else if (state.activeActionIds.has('iaq_corsi_rosenthal')) {
+        DOM.metricProtectedNote.textContent = 'DIY Corsi-Rosenthal active (MERV-13 high-CADR particle removal).';
+      } else {
+        DOM.metricProtectedNote.textContent = 'Enable HEPA or DIY box-fan filtration to reach sub-15 µg/m³ WHO target.';
+      }
+    }
+
+    if (DOM.adoptedCounter) {
+      DOM.adoptedCounter.textContent = state.activeActionIds.size;
+    }
+  }
+
+  /**
+   * Draws the baseline grid and the WHO 2021 reference limit dashed line.
+   * @private
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} chartBottom
+   * @param {number} maxVal
+   * @param {number} chartHeight
+   */
+  function drawChartGridAndReferenceLine(ctx, width, chartBottom, maxVal, chartHeight) {
+    // Background horizontal baseline
+    ctx.strokeStyle = '#e2e8f0';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(35, chartBottom);
+    ctx.lineTo(width - 20, chartBottom);
+    ctx.stroke();
+
+    // WHO 2021 Reference Line (15 µg/m³)
+    const whoY = chartBottom - (15 / maxVal) * chartHeight;
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#2563eb';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(35, whoY);
+    ctx.lineTo(width - 20, whoY);
+    ctx.stroke();
+    ctx.restore();
+
+    // WHO Line Label
+    ctx.fillStyle = '#1d4ed8';
+    ctx.font = '600 10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('WHO 15 µg/m³', width - 25, whoY - 4);
+  }
+
+  /**
+   * Draws the comparison bars and value labels on the chart.
+   * @private
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {Array<{label: string, val: number, color: string}>} items
+   * @param {number} startX
+   * @param {number} barWidth
+   * @param {number} gap
+   * @param {number} maxVal
+   * @param {number} chartHeight
+   * @param {number} chartBottom
+   */
+  function drawChartBars(ctx, items, startX, barWidth, gap, maxVal, chartHeight, chartBottom) {
+    items.forEach((item, idx) => {
+      const x = startX + idx * (barWidth + gap);
+      const barH = Math.max(6, (item.val / maxVal) * chartHeight);
+      const y = chartBottom - barH;
+
+      // Bar with rounded top corners
+      ctx.fillStyle = item.color;
+      ctx.beginPath();
+      const radius = 4;
+      ctx.moveTo(x, chartBottom);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.lineTo(x + barWidth - radius, y);
+      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+      ctx.lineTo(x + barWidth, chartBottom);
+      ctx.closePath();
+      ctx.fill();
+
+      // Numerical Value on top of bar
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 12px ui-monospace, monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${item.val.toFixed(1)}`, x + barWidth / 2, y - 6);
+
+      // Label below bar
+      ctx.fillStyle = '#475569';
+      ctx.font = '600 11px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(item.label, x + barWidth / 2, chartBottom + 18);
+    });
   }
 
   /**
@@ -175,7 +283,7 @@
     const canvas = DOM.chartCanvas;
     if (!canvas) return;
 
-    // Handle high-DPI displays
+    // Handle high-DPI displays with exact pixel ratio scaling
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(300, rect.width || canvas.parentElement.clientWidth || 600);
@@ -185,6 +293,8 @@
     canvas.height = height * dpr;
 
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, width, height);
 
@@ -211,67 +321,104 @@
     const gap = (width - 80 - barWidth * 3) / 2;
     const startX = 50;
 
-    // Background horizontal grid lines
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(35, chartBottom);
-    ctx.lineTo(width - 20, chartBottom);
-    ctx.stroke();
-
-    // WHO 2021 Reference Line (15 µg/m³)
-    const whoY = chartBottom - (15 / maxVal) * chartHeight;
-    ctx.save();
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = '#2563eb';
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(35, whoY);
-    ctx.lineTo(width - 20, whoY);
-    ctx.stroke();
-    ctx.restore();
-
-    // WHO Line Label
-    ctx.fillStyle = '#1d4ed8';
-    ctx.font = '600 10px -apple-system, sans-serif';
-    ctx.textAlign = 'right';
-    ctx.fillText('WHO 15 µg/m³', width - 25, whoY - 4);
-
-    // Draw Bars
-    items.forEach((item, idx) => {
-      const x = startX + idx * (barWidth + gap);
-      const barH = Math.max(6, (item.val / maxVal) * chartHeight);
-      const y = chartBottom - barH;
-
-      // Bar with rounded top
-      ctx.fillStyle = item.color;
-      ctx.beginPath();
-      const radius = 4;
-      ctx.moveTo(x, chartBottom);
-      ctx.lineTo(x, y + radius);
-      ctx.quadraticCurveTo(x, y, x + radius, y);
-      ctx.lineTo(x + barWidth - radius, y);
-      ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-      ctx.lineTo(x + barWidth, chartBottom);
-      ctx.closePath();
-      ctx.fill();
-
-      // Top Value Label
-      ctx.fillStyle = '#0f172a';
-      ctx.font = 'bold 12px ui-monospace, monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${item.val.toFixed(1)}`, x + barWidth / 2, y - 6);
-
-      // Bottom Axis Label
-      ctx.fillStyle = '#475569';
-      ctx.font = '600 11px -apple-system, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(item.label, x + barWidth / 2, chartBottom + 18);
-    });
+    drawChartGridAndReferenceLine(ctx, width, chartBottom, maxVal, chartHeight);
+    drawChartBars(ctx, items, startX, barWidth, gap, maxVal, chartHeight, chartBottom);
   }
 
   /**
-   * Renders the cards across all 3 tracks safely with DOM construction.
+   * Safely constructs an individual recommendation card element using DOM nodes.
+   * @private
+   * @param {Object} action - Action item definition.
+   * @param {boolean} isAdopted - Whether action is adopted.
+   * @param {boolean} isRec - Whether action is recommended for current profile.
+   * @returns {HTMLElement} Constructed card element.
+   */
+  function createActionCardElement(action, isAdopted, isRec) {
+    const card = document.createElement('article');
+    card.className = `action-card ${isAdopted ? 'adopted' : ''}`;
+    card.setAttribute('data-action-id', action.id);
+
+    // Top metadata row
+    const topRow = document.createElement('div');
+    topRow.className = 'action-top-row';
+
+    const tagSpan = document.createElement('span');
+    tagSpan.className = 'action-tag';
+    tagSpan.textContent = action.tag;
+    topRow.appendChild(tagSpan);
+
+    if (isRec) {
+      const recBadge = document.createElement('span');
+      recBadge.className = 'rec-badge';
+      recBadge.textContent = 'Recommended';
+      topRow.appendChild(recBadge);
+    }
+    card.appendChild(topRow);
+
+    // Action Title
+    const titleH3 = document.createElement('h3');
+    titleH3.className = 'action-title';
+    titleH3.textContent = action.title;
+    card.appendChild(titleH3);
+
+    // Plain-Language Direct Impact Box
+    const impactBox = document.createElement('div');
+    impactBox.className = 'impact-box';
+
+    const impactLabel = document.createElement('span');
+    impactLabel.className = 'impact-label';
+    impactLabel.textContent = 'Direct Impact';
+    impactBox.appendChild(impactLabel);
+
+    const impactText = document.createElement('p');
+    impactText.className = 'impact-text';
+    impactText.textContent = action.directImpact;
+    impactBox.appendChild(impactText);
+    card.appendChild(impactBox);
+
+    // Scientific Evidence Box
+    const evidenceBox = document.createElement('p');
+    evidenceBox.className = 'evidence-box';
+    evidenceBox.textContent = action.scientificEvidence;
+    card.appendChild(evidenceBox);
+
+    // Footer with stats and toggle button
+    const footer = document.createElement('div');
+    footer.className = 'action-footer';
+
+    const statsDiv = document.createElement('div');
+    statsDiv.className = 'action-stats';
+
+    if (action.exposureReductionFactor > 0) {
+      const expStat = document.createElement('span');
+      expStat.className = 'stat-item';
+      expStat.textContent = `🛡️ -${Math.round(action.exposureReductionFactor * 100)}% PM2.5`;
+      statsDiv.appendChild(expStat);
+    }
+    if (action.co2eAvoidedKg > 0) {
+      const co2Stat = document.createElement('span');
+      co2Stat.className = 'stat-item';
+      co2Stat.textContent = `🌱 -${action.co2eAvoidedKg} kg CO₂e`;
+      statsDiv.appendChild(co2Stat);
+    }
+    footer.appendChild(statsDiv);
+
+    // Toggle Action Button
+    const toggleBtn = document.createElement('button');
+    toggleBtn.type = 'button';
+    toggleBtn.className = 'btn-toggle-action';
+    toggleBtn.setAttribute('data-action-id', action.id);
+    toggleBtn.setAttribute('aria-pressed', isAdopted ? 'true' : 'false');
+    toggleBtn.setAttribute('aria-label', `${isAdopted ? 'Remove' : 'Adopt'} ${action.title}`);
+    toggleBtn.textContent = isAdopted ? 'Adopted ✓' : 'Adopt Action';
+    footer.appendChild(toggleBtn);
+
+    card.appendChild(footer);
+    return card;
+  }
+
+  /**
+   * Renders the cards across all 3 tracks safely with clean DOM construction.
    */
   function renderActionCards() {
     const tracks = ['routines', 'iaq', 'community'];
@@ -290,7 +437,7 @@
         return true;
       });
 
-      // Clear container
+      // Clear container safely
       container.innerHTML = '';
 
       if (filtered.length === 0) {
@@ -302,93 +449,47 @@
         return;
       }
 
-      // Build cards safely without innerHTML string interpolation
+      // Build cards using dedicated modular helper
       filtered.forEach(action => {
         const isAdopted = state.activeActionIds.has(action.id);
         const isRec = DomainLogic.isRecommended(action, state.household, state.aqi);
-
-        const card = document.createElement('article');
-        card.className = `action-card ${isAdopted ? 'adopted' : ''}`;
-        card.setAttribute('data-action-id', action.id);
-
-        // Top Row
-        const topRow = document.createElement('div');
-        topRow.className = 'action-top-row';
-
-        const tagSpan = document.createElement('span');
-        tagSpan.className = 'action-tag';
-        tagSpan.textContent = action.tag;
-        topRow.appendChild(tagSpan);
-
-        if (isRec) {
-          const recBadge = document.createElement('span');
-          recBadge.className = 'rec-badge';
-          recBadge.textContent = 'Recommended';
-          topRow.appendChild(recBadge);
-        }
-        card.appendChild(topRow);
-
-        // Title
-        const titleH3 = document.createElement('h3');
-        titleH3.className = 'action-title';
-        titleH3.textContent = action.title;
-        card.appendChild(titleH3);
-
-        // Direct Impact Box (plain-language)
-        const impactBox = document.createElement('div');
-        impactBox.className = 'impact-box';
-
-        const impactLabel = document.createElement('span');
-        impactLabel.className = 'impact-label';
-        impactLabel.textContent = 'Direct Impact';
-        impactBox.appendChild(impactLabel);
-
-        const impactText = document.createElement('p');
-        impactText.className = 'impact-text';
-        impactText.textContent = action.directImpact;
-        impactBox.appendChild(impactText);
-        card.appendChild(impactBox);
-
-        // Scientific Evidence
-        const evidenceBox = document.createElement('p');
-        evidenceBox.className = 'evidence-box';
-        evidenceBox.textContent = action.scientificEvidence;
-        card.appendChild(evidenceBox);
-
-        // Footer Row
-        const footer = document.createElement('div');
-        footer.className = 'action-footer';
-
-        const statsDiv = document.createElement('div');
-        statsDiv.className = 'action-stats';
-
-        if (action.exposureReductionFactor > 0) {
-          const expStat = document.createElement('span');
-          expStat.className = 'stat-item';
-          expStat.textContent = `🛡️ -${Math.round(action.exposureReductionFactor * 100)}% PM2.5`;
-          statsDiv.appendChild(expStat);
-        }
-        if (action.co2eAvoidedKg > 0) {
-          const co2Stat = document.createElement('span');
-          co2Stat.className = 'stat-item';
-          co2Stat.textContent = `🌱 -${action.co2eAvoidedKg} kg CO₂e`;
-          statsDiv.appendChild(co2Stat);
-        }
-        footer.appendChild(statsDiv);
-
-        // Toggle Action Button
-        const toggleBtn = document.createElement('button');
-        toggleBtn.type = 'button';
-        toggleBtn.className = 'btn-toggle-action';
-        toggleBtn.setAttribute('data-action-id', action.id);
-        toggleBtn.setAttribute('aria-pressed', isAdopted ? 'true' : 'false');
-        toggleBtn.setAttribute('aria-label', `${isAdopted ? 'Remove' : 'Adopt'} ${action.title}`);
-        toggleBtn.textContent = isAdopted ? 'Adopted ✓' : 'Adopt Action';
-        footer.appendChild(toggleBtn);
-
-        card.appendChild(footer);
-        container.appendChild(card);
+        const cardEl = createActionCardElement(action, isAdopted, isRec);
+        container.appendChild(cardEl);
       });
+    });
+  }
+
+  /**
+   * Parses markdown formatted text (bold tags and line breaks) safely into DOM elements.
+   * @private
+   * @param {HTMLElement} parent
+   * @param {string} text
+   */
+  function formatAndAppendParagraphs(parent, text) {
+    const lines = text.split('\n');
+    lines.forEach(line => {
+      if (!line.trim()) {
+        const spacer = document.createElement('div');
+        spacer.style.height = '0.5rem';
+        parent.appendChild(spacer);
+        return;
+      }
+
+      const p = document.createElement('p');
+      p.style.marginBottom = '0.35rem';
+
+      // Parse bold **...** segments without innerHTML
+      const parts = line.split(/(\*\*.*?\*\*)/g);
+      parts.forEach(part => {
+        if (part.startsWith('**') && part.endsWith('**')) {
+          const strong = document.createElement('strong');
+          strong.textContent = part.slice(2, -2);
+          p.appendChild(strong);
+        } else {
+          p.appendChild(document.createTextNode(part));
+        }
+      });
+      parent.appendChild(p);
     });
   }
 
@@ -429,32 +530,7 @@
         bubble.appendChild(tagRow);
       }
 
-      // Safe formatting of text with bold (**word**) and bullet points
-      const lines = text.split('\n');
-      lines.forEach(line => {
-        if (!line.trim()) {
-          const spacer = document.createElement('div');
-          spacer.style.height = '0.5rem';
-          bubble.appendChild(spacer);
-          return;
-        }
-
-        const p = document.createElement('p');
-        p.style.marginBottom = '0.35rem';
-
-        // Parse bold tags **...** safely
-        const parts = line.split(/(\*\*.*?\*\*)/g);
-        parts.forEach(part => {
-          if (part.startsWith('**') && part.endsWith('**')) {
-            const strong = document.createElement('strong');
-            strong.textContent = part.slice(2, -2);
-            p.appendChild(strong);
-          } else {
-            p.appendChild(document.createTextNode(part));
-          }
-        });
-        bubble.appendChild(p);
-      });
+      formatAndAppendParagraphs(bubble, text);
     } else {
       bubble.textContent = text;
     }
@@ -465,11 +541,14 @@
   }
 
   // -------------------------------------------------------------
-  // EVENT LISTENERS & DELEGATION
+  // EVENT BINDINGS (Modular Single-Responsibility Sub-functions)
   // -------------------------------------------------------------
 
-  function bindEvents() {
-    // City Selector
+  /**
+   * Binds configurator selector changes.
+   * @private
+   */
+  function bindConfiguratorEvents() {
     DOM.selectCity.addEventListener('change', e => {
       const cityId = e.target.value;
       state.cityId = cityId;
@@ -480,25 +559,27 @@
       renderAll();
     });
 
-    // Household Selector
     DOM.selectHousehold.addEventListener('change', e => {
       state.household = e.target.value;
       renderAll();
     });
 
-    // Commute Selector
     DOM.selectCommute.addEventListener('change', e => {
       state.commute = e.target.value;
       renderAll();
     });
 
-    // Purifier Selector
     DOM.selectPurifier.addEventListener('change', e => {
       state.purifier = e.target.value;
       renderAll();
     });
+  }
 
-    // AQI Slider with RAF throttling for smooth continuous dragging
+  /**
+   * Binds AQI slider and numeric input synchronization with RAF pacing.
+   * @private
+   */
+  function bindAqiControlEvents() {
     DOM.sliderAqi.addEventListener('input', e => {
       const val = Security.clampNumber(e.target.value, 0, 9999, 200);
       state.aqi = val;
@@ -515,12 +596,10 @@
       }
     });
 
-    // Rerender cards on slider change end
     DOM.sliderAqi.addEventListener('change', () => {
       renderAll();
     });
 
-    // Direct Numeric AQI Input
     DOM.inputAqi.addEventListener('change', e => {
       const val = Security.clampNumber(e.target.value, 0, 9999, 200);
       state.aqi = val;
@@ -528,8 +607,14 @@
       state.cityId = 'custom';
       renderAll();
     });
+  }
 
-    // Event Delegation for Action Card Toggles
+  /**
+   * Binds event delegation on action tracks, filter chips, and tab navigation.
+   * @private
+   */
+  function bindActionTrackEvents() {
+    // Delegated toggle listener on action containers
     ['routines', 'iaq', 'community'].forEach(track => {
       const container = DOM.containers[track];
       if (!container) return;
@@ -597,7 +682,7 @@
       });
     });
 
-    // Simulator Quick Action Buttons
+    // Quick Action Buttons
     DOM.btnSelectRecommended.addEventListener('click', () => {
       CONFIG.ACTIONS.forEach(act => {
         if (DomainLogic.isRecommended(act, state.household, state.aqi)) {
@@ -611,8 +696,13 @@
       state.activeActionIds.clear();
       renderAll();
     });
+  }
 
-    // Quick Prompt Chips for GenAI Advisor
+  /**
+   * Binds advisor prompt chips and form submission.
+   * @private
+   */
+  function bindAdvisorEvents() {
     if (DOM.promptChipsContainer) {
       DOM.promptChipsContainer.addEventListener('click', e => {
         const chip = e.target.closest('.prompt-chip');
@@ -624,7 +714,6 @@
       });
     }
 
-    // Advisor Form Submit
     DOM.advisorForm.addEventListener('submit', e => {
       e.preventDefault();
       const query = DOM.advisorInput.value.trim();
@@ -632,14 +721,18 @@
       DOM.advisorInput.value = '';
       handleAdvisorQuery(query);
     });
+  }
 
-    // Run Checks Button
+  /**
+   * Binds modal dialog actions, keyboard escape, and window resizing.
+   * @private
+   */
+  function bindModalEvents() {
     DOM.btnRunChecks.addEventListener('click', () => {
       openTestModal();
       runSelfTestUI();
     });
 
-    // Modal Actions & Accessibility
     DOM.modalBtnClose.addEventListener('click', closeTestModal);
     DOM.modalBtnDismiss.addEventListener('click', closeTestModal);
     DOM.modalBtnRerun.addEventListener('click', runSelfTestUI);
@@ -650,10 +743,20 @@
       }
     });
 
-    // Window Resize -> rerender chart smoothly
     window.addEventListener('resize', () => {
       renderChart();
     });
+  }
+
+  /**
+   * Master event initialization.
+   */
+  function bindEvents() {
+    bindConfiguratorEvents();
+    bindAqiControlEvents();
+    bindActionTrackEvents();
+    bindAdvisorEvents();
+    bindModalEvents();
   }
 
   /**
@@ -690,7 +793,7 @@
   function handleAdvisorQuery(query) {
     appendAdvisorMessage('user', query);
 
-    // Simulate instant context-aware synthesis
+    // Instant context-aware synthesis
     const advice = DomainLogic.generateAdvisorReply({
       query,
       aqi: state.aqi,
@@ -723,7 +826,8 @@
   }
 
   /**
-   * Executes SelfTest suite including 10,000 stress iterations and updates UI telemetry.
+   * Executes SelfTest suite including 10,000 stress iterations via the shared engine
+   * and updates UI telemetry and terminal logs.
    */
   function runSelfTestUI() {
     DOM.modalTestBadge.textContent = 'Running';
@@ -742,170 +846,30 @@
 
     log('Initializing SmogShield Verification & Fuzz Suite...', 'info');
 
-    // Run asynchronously to allow DOM paint
+    // Run asynchronously to allow browser paint
     setTimeout(() => {
-      const startTime = performance.now();
-      let unitPassed = 0;
-      const unitTotal = 6;
+      const result = SelfTest.runAll({
+        onLog: log,
+        stressIterations: 10000
+      });
 
-      try {
-        // 1. CPCB Breakpoints
-        const p25 = DomainLogic.aqiToPm25(25);
-        const p150 = DomainLogic.aqiToPm25(150);
-        const p350 = DomainLogic.aqiToPm25(350);
-        const p450 = DomainLogic.aqiToPm25(450);
-        if (p25 <= 30 && p150 <= 90 && p350 <= 250 && p450 <= 380) {
-          unitPassed++;
-          log('✓ Check 1: CPCB AQI piecewise breakpoint calculations accurate.', 'pass');
-        } else {
-          throw new Error('CPCB breakpoint test failed.');
-        }
-
-        // 2. Category Boundary
-        const c0 = DomainLogic.getAqiCategory(0).key === 'good';
-        const c100 = DomainLogic.getAqiCategory(100).key === 'satisfactory';
-        const c200 = DomainLogic.getAqiCategory(200).key === 'moderate';
-        const c300 = DomainLogic.getAqiCategory(300).key === 'poor';
-        const c400 = DomainLogic.getAqiCategory(400).key === 'very_poor';
-        const c500 = DomainLogic.getAqiCategory(500).key === 'severe';
-        const c600 = DomainLogic.getAqiCategory(600).key === 'severe_plus';
-        if (c0 && c100 && c200 && c300 && c400 && c500 && c600) {
-          unitPassed++;
-          log('✓ Check 2: All 7 AQI category boundary classifications verified.', 'pass');
-        } else {
-          throw new Error('Category classification test failed.');
-        }
-
-        // 3. Metric Invariants
-        const m = DomainLogic.computeMetrics({
-          aqi: 340,
-          household: 'seniors_multi',
-          commute: 'car',
-          purifier: 'hepa',
-          activeActionIds: ['iaq_true_hepa', 'iaq_door_sealing']
-        });
-        if (
-          !Number.isNaN(m.outdoorPm25) &&
-          !Number.isNaN(m.protectedIndoorPm25) &&
-          m.protectedIndoorPm25 <= m.unmitigatedIndoorPm25 &&
-          m.reductionPercent >= 0 &&
-          m.reductionPercent <= 100
-        ) {
-          unitPassed++;
-          log('✓ Check 3: Metric invariants verified (no NaNs, protected <= unmitigated).', 'pass');
-        } else {
-          throw new Error('Metric invariant calculation failed.');
-        }
-
-        // 4. XSS Sanitization
-        const dirty = '<script>alert(1)</script><img src=x onerror=alert(2)>&"\'';
-        const clean = Security.escapeHtml(dirty);
-        if (!clean.includes('<') && !clean.includes('>') && clean.includes('&lt;') && clean.includes('&gt;')) {
-          unitPassed++;
-          log('✓ Check 4: Strict XSS neutralization verified (&, <, >, ", \' escaped).', 'pass');
-        } else {
-          throw new Error('XSS neutralization test failed.');
-        }
-
-        // 5. ACTION_MAP Parity
-        if (CONFIG.ACTION_MAP && CONFIG.ACTION_MAP.size === CONFIG.ACTIONS.length) {
-          unitPassed++;
-          log(`✓ Check 5: ACTION_MAP O(1) parity verified (${CONFIG.ACTIONS.length} actions).`, 'pass');
-        } else {
-          throw new Error('ACTION_MAP parity failed.');
-        }
-
-        // 6. Advisor Generation
-        const adv = DomainLogic.generateAdvisorReply({
-          query: 'What outdoor exercise window is safe today?',
-          aqi: 350,
-          household: 'families_kids',
-          commute: 'two_wheeler',
-          purifier: 'hepa',
-          activeActionIds: state.activeActionIds
-        });
-        if (adv && adv.text && adv.text.length > 50) {
-          unitPassed++;
-          log('✓ Check 6: Context-aware GenAI advisor response generation verified.', 'pass');
-        } else {
-          throw new Error('Advisor reply generation failed.');
-        }
-
-        // 7. 10,000-Iteration Stress & Fuzz Suite
-        log('Executing 10,000-Iteration Automated Fuzz & Extreme Bounds Test...', 'info');
-
-        const extremeAqis = [-100, 0, 50, 100, 200, 300, 400, 500, 999, 9999, NaN, Infinity, -Infinity, null, undefined, 'abc'];
-        const householdKeys = Object.keys(CONFIG.HOUSEHOLDS);
-        const commuteKeys = Object.keys(CONFIG.COMMUTE_MODES);
-        const purifierKeys = Object.keys(CONFIG.PURIFIER_SETUPS);
-        const actionIds = CONFIG.ACTIONS.map(a => a.id);
-
-        for (let i = 0; i < 10000; i++) {
-          const rawAqi = (i % 25 === 0)
-            ? extremeAqis[i % extremeAqis.length]
-            : (i * 37) % 650;
-
-          const household = householdKeys[i % householdKeys.length];
-          const commute = commuteKeys[i % commuteKeys.length];
-          const purifier = purifierKeys[i % purifierKeys.length];
-
-          const activeSet = new Set();
-          const count = i % (actionIds.length + 1);
-          for (let c = 0; c < count; c++) {
-            activeSet.add(actionIds[(i + c) % actionIds.length]);
-          }
-
-          // Invariant Check
-          const sim = DomainLogic.computeMetrics({
-            aqi: rawAqi,
-            household,
-            commute,
-            purifier,
-            activeActionIds: activeSet
-          });
-
-          if (Number.isNaN(sim.outdoorPm25) || Number.isNaN(sim.protectedIndoorPm25)) {
-            throw new Error(`Stress iteration ${i} produced NaN metrics.`);
-          }
-          if (sim.protectedIndoorPm25 > sim.unmitigatedIndoorPm25 + 0.001) {
-            throw new Error(`Stress iteration ${i} violated protected <= unmitigated.`);
-          }
-
-          // XSS Fuzzing
-          const rawPayload = `<a href="javascript:void(${i})">test & ${i}</a>`;
-          const sanitized = Security.escapeHtml(rawPayload);
-          if (sanitized.includes('<') || sanitized.includes('>')) {
-            throw new Error(`Stress iteration ${i} failed XSS escaping.`);
-          }
-        }
-
-        const elapsedMs = Math.round(performance.now() - startTime);
-
-        log(`✓ Check 7: 10,000 stress/fuzz iterations completed successfully with zero errors (${elapsedMs} ms)!`, 'pass');
-        log('100% SUITE PASSED — All CPCB, WHO, Security, and Invariant gates verified.', 'pass');
-
-        // Update Modal Telemetry
+      if (result.passed) {
         DOM.modalTestBadge.textContent = '100% Passed';
         DOM.modalTestBadge.className = 'test-badge test-passed';
         DOM.testSummaryResult.textContent = 'Passed';
         DOM.testSummaryResult.className = 'summary-val text-success';
-        DOM.testSummaryUnit.textContent = `${unitPassed} / ${unitTotal} Passed`;
-        DOM.testSummaryStress.textContent = '10,000 / 10,000';
-        DOM.testSummaryTime.textContent = `${elapsedMs} ms`;
+        DOM.testSummaryUnit.textContent = `${result.unitPassed} / ${result.unitTotal} Passed`;
+        DOM.testSummaryStress.textContent = `${result.stressIterations.toLocaleString()} / ${result.stressIterations.toLocaleString()}`;
+        DOM.testSummaryTime.textContent = `${result.elapsedMs} ms`;
 
-        // Update Header Badge
-        DOM.testStatusBadge.textContent = `Passed (${elapsedMs}ms)`;
+        DOM.testStatusBadge.textContent = `Passed (${result.elapsedMs}ms)`;
         DOM.testStatusBadge.className = 'test-badge test-passed';
-
-      } catch (err) {
-        const elapsedMs = Math.round(performance.now() - startTime);
-        log(`✗ Test Failure: ${err.message}`, 'fail');
-
+      } else {
         DOM.modalTestBadge.textContent = 'Failed';
         DOM.modalTestBadge.className = 'test-badge test-failed';
         DOM.testSummaryResult.textContent = 'Failed';
         DOM.testSummaryResult.className = 'summary-val text-danger';
-        DOM.testSummaryTime.textContent = `${elapsedMs} ms`;
+        DOM.testSummaryTime.textContent = `${result.elapsedMs} ms`;
 
         DOM.testStatusBadge.textContent = 'Failed';
         DOM.testStatusBadge.className = 'test-badge test-failed';
@@ -921,7 +885,7 @@
     bindEvents();
     renderAll();
 
-    // Initial greeting in advisor
+    // Initial contextual welcome greeting in advisor
     const initialAdvice = DomainLogic.generateAdvisorReply({
       query: 'initial welcome greeting',
       aqi: state.aqi,
@@ -937,7 +901,7 @@
     runSelfTestUI();
   }
 
-  // Expose SelfTest publicly for headless or console inspection
+  // Expose SelfTest publicly on window.SmogShield for headless or console inspection
   window.SmogShield = window.SmogShield || {};
   window.SmogShield.SelfTest = {
     runAll: runSelfTestUI
