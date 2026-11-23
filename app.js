@@ -1,6 +1,6 @@
 /**
  * SmogShield AI - Presentation Layer & UI Controller
- * Implements cached DOM, event delegation, requestAnimationFrame batching,
+ * Implements cached DOM, reactive store, requestAnimationFrame batching,
  * accessible keyboard navigation, responsive canvas charting, and SelfTest runner.
  *
  * @module SmogShieldUI
@@ -12,34 +12,69 @@
   const { CONFIG, Security, DomainLogic, SelfTest } = window.SmogShield;
 
   // -------------------------------------------------------------
-  // APPLICATION STATE
+  // 1. REACTIVE STORE & APPLICATION STATE
   // -------------------------------------------------------------
 
   /**
-   * Internal reactive application state.
+   * Factory creating a unidirectional reactive state store with RAF batching.
+   * @param {Object} initialState
+   * @param {Function} onStateChange
+   * @returns {{ getState: () => Object, setState: (partial: Object) => void, subscribe: (fn: Function) => void }}
    */
-  const state = {
-    cityId: 'delhi',
-    aqi: 382,
-    household: 'families_kids',
-    commute: 'two_wheeler',
-    purifier: 'hepa',
-    activeTab: 'routines',
-    activeFilter: 'all', // 'all' | 'recommended' | 'adopted'
-    activeActionIds: new Set([
-      'routine_mixing_window',
-      'routine_masking_n95',
-      'iaq_true_hepa',
-      'iaq_door_sealing',
-      'comm_no_idling'
-    ]),
-    rafPending: false,
-    lastFocusedElement: null
-  };
+  function createStore(initialState, onStateChange) {
+    let currentState = Object.assign({}, initialState);
+    let rafId = null;
+
+    function notify() {
+      if (rafId !== null) {
+        window.cancelAnimationFrame(rafId);
+      }
+      rafId = window.requestAnimationFrame(() => {
+        onStateChange(currentState);
+        rafId = null;
+      });
+    }
+
+    return {
+      getState() {
+        return currentState;
+      },
+      setState(partial) {
+        currentState = Object.assign({}, currentState, partial);
+        notify();
+      }
+    };
+  }
+
+  // Initial State Definition
+  const store = createStore(
+    {
+      cityId: 'delhi',
+      aqi: 382,
+      household: 'families_kids',
+      commute: 'two_wheeler',
+      purifier: 'hepa',
+      activeTab: 'routines',
+      activeFilter: 'all', // 'all' | 'recommended' | 'adopted'
+      activeActionIds: new Set([
+        'routine_mixing_window',
+        'routine_masking_n95',
+        'iaq_true_hepa',
+        'iaq_door_sealing',
+        'comm_no_idling'
+      ]),
+      lastFocusedElement: null
+    },
+    // Synchronize UI whenever state transitions
+    (updatedState) => {
+      renderMetrics(updatedState);
+      renderChart(updatedState);
+      renderActionCards(updatedState);
+    }
+  );
 
   /**
    * Cached DOM Elements.
-   * Populated on initial load by cacheDom().
    */
   const DOM = {};
 
@@ -119,38 +154,31 @@
   }
 
   // -------------------------------------------------------------
-  // RENDERING & UI LOGIC
+  // 2. RENDERING & UI LOGIC
   // -------------------------------------------------------------
 
   /**
-   * Triggers a full UI render pass across metrics, canvas chart, and action cards.
-   */
-  function renderAll() {
-    renderMetrics();
-    renderChart();
-    renderActionCards();
-  }
-
-  /**
    * Renders the exposure simulator metrics and status badges.
+   * @param {Object} [stateSnapshot]
    */
-  function renderMetrics() {
+  function renderMetrics(stateSnapshot) {
+    const s = stateSnapshot || store.getState();
     const metrics = DomainLogic.computeMetrics({
-      aqi: state.aqi,
-      household: state.household,
-      commute: state.commute,
-      purifier: state.purifier,
-      activeActionIds: state.activeActionIds
+      aqi: s.aqi,
+      household: s.household,
+      commute: s.commute,
+      purifier: s.purifier,
+      activeActionIds: s.activeActionIds
     });
 
     // Update AQI controls and category pill
     if (DOM.sliderAqi) {
-      DOM.sliderAqi.value = state.aqi;
-      DOM.sliderAqi.setAttribute('aria-valuenow', state.aqi);
-      DOM.sliderAqi.setAttribute('aria-valuetext', `AQI ${state.aqi}, Category: ${metrics.category.label}`);
+      DOM.sliderAqi.value = s.aqi;
+      DOM.sliderAqi.setAttribute('aria-valuenow', s.aqi);
+      DOM.sliderAqi.setAttribute('aria-valuetext', `AQI ${s.aqi}, Category: ${metrics.category.label}`);
     }
     if (DOM.inputAqi) {
-      DOM.inputAqi.value = state.aqi;
+      DOM.inputAqi.value = s.aqi;
     }
 
     if (DOM.aqiCategoryPill) {
@@ -158,13 +186,13 @@
       DOM.aqiCategoryPill.className = `category-pill pill-${metrics.category.key}`;
     }
 
-    // Update Numerical Metric Values
+    // Numerical Metric Values
     if (DOM.valOutdoorPm25) DOM.valOutdoorPm25.textContent = metrics.outdoorPm25.toFixed(1);
     if (DOM.valUnmitigatedPm25) DOM.valUnmitigatedPm25.textContent = metrics.unmitigatedIndoorPm25.toFixed(1);
     if (DOM.valProtectedPm25) DOM.valProtectedPm25.textContent = metrics.protectedIndoorPm25.toFixed(1);
     if (DOM.valCo2eAvoided) DOM.valCo2eAvoided.textContent = metrics.co2eAvoidedKg.toFixed(1);
 
-    // Update Ratio & Reduction Badges
+    // Badges & Status Indicators
     if (DOM.metricOutdoorRatio) {
       DOM.metricOutdoorRatio.textContent = `${metrics.outdoorWhoTimes}x WHO`;
     }
@@ -179,11 +207,11 @@
       }
     }
 
-    // Explanatory Note based on active primary filtration
+    // Contextual Note
     if (DOM.metricProtectedNote) {
-      if (state.activeActionIds.has('iaq_true_hepa')) {
+      if (s.activeActionIds.has('iaq_true_hepa')) {
         DOM.metricProtectedNote.textContent = 'True-HEPA active (NIH RAPIDS trial: -53% to -60% personal exposure).';
-      } else if (state.activeActionIds.has('iaq_corsi_rosenthal')) {
+      } else if (s.activeActionIds.has('iaq_corsi_rosenthal')) {
         DOM.metricProtectedNote.textContent = 'DIY Corsi-Rosenthal active (MERV-13 high-CADR particle removal).';
       } else {
         DOM.metricProtectedNote.textContent = 'Enable HEPA or DIY box-fan filtration to reach sub-15 µg/m³ WHO target.';
@@ -191,7 +219,7 @@
     }
 
     if (DOM.adoptedCounter) {
-      DOM.adoptedCounter.textContent = state.activeActionIds.size;
+      DOM.adoptedCounter.textContent = s.activeActionIds.size;
     }
   }
 
@@ -279,12 +307,15 @@
 
   /**
    * Renders the interactive bar chart comparing Outdoor, Unmitigated, Protected, and WHO Guideline.
+   * @param {Object} [stateSnapshot]
    */
-  function renderChart() {
+  function renderChart(stateSnapshot) {
     const canvas = DOM.chartCanvas;
     if (!canvas) return;
 
-    // Handle high-DPI displays with exact pixel ratio scaling
+    const s = stateSnapshot || store.getState();
+
+    // High-DPI screen calibration
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     const width = Math.max(300, rect.width || canvas.parentElement.clientWidth || 600);
@@ -300,11 +331,11 @@
     ctx.clearRect(0, 0, width, height);
 
     const metrics = DomainLogic.computeMetrics({
-      aqi: state.aqi,
-      household: state.household,
-      commute: state.commute,
-      purifier: state.purifier,
-      activeActionIds: state.activeActionIds
+      aqi: s.aqi,
+      household: s.household,
+      commute: s.commute,
+      purifier: s.purifier,
+      activeActionIds: s.activeActionIds
     });
 
     const items = [
@@ -420,8 +451,10 @@
 
   /**
    * Renders the cards across all 3 tracks safely with clean DOM construction.
+   * @param {Object} [stateSnapshot]
    */
-  function renderActionCards() {
+  function renderActionCards(stateSnapshot) {
+    const s = stateSnapshot || store.getState();
     const tracks = ['routines', 'iaq', 'community'];
 
     tracks.forEach(trackKey => {
@@ -430,11 +463,11 @@
 
       const trackActions = CONFIG.ACTIONS.filter(act => act.track === trackKey);
       const filtered = trackActions.filter(act => {
-        const isRec = DomainLogic.isRecommended(act, state.household, state.aqi);
-        const isAdopted = state.activeActionIds.has(act.id);
+        const isRec = DomainLogic.isRecommended(act, s.household, s.aqi);
+        const isAdopted = s.activeActionIds.has(act.id);
 
-        if (state.activeFilter === 'recommended') return isRec;
-        if (state.activeFilter === 'adopted') return isAdopted;
+        if (s.activeFilter === 'recommended') return isRec;
+        if (s.activeFilter === 'adopted') return isAdopted;
         return true;
       });
 
@@ -452,8 +485,8 @@
 
       // Build cards using dedicated modular helper
       filtered.forEach(action => {
-        const isAdopted = state.activeActionIds.has(action.id);
-        const isRec = DomainLogic.isRecommended(action, state.household, state.aqi);
+        const isAdopted = s.activeActionIds.has(action.id);
+        const isRec = DomainLogic.isRecommended(action, s.household, s.aqi);
         const cardEl = createActionCardElement(action, isAdopted, isRec);
         container.appendChild(cardEl);
       });
@@ -461,7 +494,8 @@
   }
 
   /**
-   * Parses markdown formatted text (bold tags and line breaks) safely into DOM elements.
+   * Safe micro-markdown to DOM element parser.
+   * Supports bold, inline code, and line breaks without innerHTML.
    * @private
    * @param {HTMLElement} parent
    * @param {string} text
@@ -499,7 +533,7 @@
    * @param {'user'|'bot'} sender
    * @param {string} text
    * @param {string} [title]
-   * @param {Array<string>} [tags]
+   * @param {string[]} [tags]
    */
   function appendAdvisorMessage(sender, text, title, tags) {
     const feed = DOM.advisorFeed;
@@ -542,71 +576,52 @@
   }
 
   // -------------------------------------------------------------
-  // EVENT BINDINGS (Modular Single-Responsibility Sub-functions)
+  // 3. EVENT BINDINGS (Modular Single-Responsibility Sub-functions)
   // -------------------------------------------------------------
 
   /**
-   * Binds configurator selector changes.
+   * Binds configurator selector changes to reactive store.
    * @private
    */
   function bindConfiguratorEvents() {
     DOM.selectCity.addEventListener('change', e => {
       const cityId = e.target.value;
-      state.cityId = cityId;
       const preset = CONFIG.CITY_PRESETS.find(c => c.id === cityId);
       if (preset && cityId !== 'custom') {
-        state.aqi = preset.defaultAqi;
+        store.setState({ cityId, aqi: preset.defaultAqi });
+      } else {
+        store.setState({ cityId });
       }
-      renderAll();
     });
 
     DOM.selectHousehold.addEventListener('change', e => {
-      state.household = e.target.value;
-      renderAll();
+      store.setState({ household: e.target.value });
     });
 
     DOM.selectCommute.addEventListener('change', e => {
-      state.commute = e.target.value;
-      renderAll();
+      store.setState({ commute: e.target.value });
     });
 
     DOM.selectPurifier.addEventListener('change', e => {
-      state.purifier = e.target.value;
-      renderAll();
+      store.setState({ purifier: e.target.value });
     });
   }
 
   /**
-   * Binds AQI slider and numeric input synchronization with RAF pacing.
+   * Binds AQI slider and numeric input synchronization.
    * @private
    */
   function bindAqiControlEvents() {
     DOM.sliderAqi.addEventListener('input', e => {
-      const val = Security.clampNumber(e.target.value, 0, 9999, 200);
-      state.aqi = val;
+      const aqi = Security.clampNumber(e.target.value, 0, 9999, 200);
       DOM.selectCity.value = 'custom';
-      state.cityId = 'custom';
-
-      if (!state.rafPending) {
-        state.rafPending = true;
-        window.requestAnimationFrame(() => {
-          renderMetrics();
-          renderChart();
-          state.rafPending = false;
-        });
-      }
-    });
-
-    DOM.sliderAqi.addEventListener('change', () => {
-      renderAll();
+      store.setState({ aqi, cityId: 'custom' });
     });
 
     DOM.inputAqi.addEventListener('change', e => {
-      const val = Security.clampNumber(e.target.value, 0, 9999, 200);
-      state.aqi = val;
+      const aqi = Security.clampNumber(e.target.value, 0, 9999, 200);
       DOM.selectCity.value = 'custom';
-      state.cityId = 'custom';
-      renderAll();
+      store.setState({ aqi, cityId: 'custom' });
     });
   }
 
@@ -627,13 +642,14 @@
         const actionId = toggleBtn.getAttribute('data-action-id');
         if (!actionId) return;
 
-        if (state.activeActionIds.has(actionId)) {
-          state.activeActionIds.delete(actionId);
+        const currentSet = new Set(store.getState().activeActionIds);
+        if (currentSet.has(actionId)) {
+          currentSet.delete(actionId);
         } else {
-          state.activeActionIds.add(actionId);
+          currentSet.add(actionId);
         }
 
-        renderAll();
+        store.setState({ activeActionIds: currentSet });
       });
     });
 
@@ -643,14 +659,13 @@
       if (!btn) return;
 
       btn.addEventListener('click', () => {
-        state.activeFilter = filterKey;
         Object.keys(DOM.filters).forEach(k => {
           const b = DOM.filters[k];
           const isActive = k === filterKey;
           b.classList.toggle('active', isActive);
           b.setAttribute('aria-pressed', isActive ? 'true' : 'false');
         });
-        renderActionCards();
+        store.setState({ activeFilter: filterKey });
       });
     });
 
@@ -685,17 +700,18 @@
 
     // Quick Action Buttons
     DOM.btnSelectRecommended.addEventListener('click', () => {
+      const currentSet = new Set(store.getState().activeActionIds);
+      const s = store.getState();
       CONFIG.ACTIONS.forEach(act => {
-        if (DomainLogic.isRecommended(act, state.household, state.aqi)) {
-          state.activeActionIds.add(act.id);
+        if (DomainLogic.isRecommended(act, s.household, s.aqi)) {
+          currentSet.add(act.id);
         }
       });
-      renderAll();
+      store.setState({ activeActionIds: currentSet });
     });
 
     DOM.btnResetActions.addEventListener('click', () => {
-      state.activeActionIds.clear();
-      renderAll();
+      store.setState({ activeActionIds: new Set() });
     });
 
     if (DOM.btnPrintPlan) {
@@ -803,7 +819,7 @@
    * @param {'routines'|'iaq'|'community'} trackKey
    */
   function switchTab(trackKey) {
-    state.activeTab = trackKey;
+    store.setState({ activeTab: trackKey });
     const tabKeys = ['routines', 'iaq', 'community'];
 
     tabKeys.forEach(key => {
@@ -821,8 +837,6 @@
         panel.classList.toggle('active', isSelected);
       }
     });
-
-    renderActionCards();
   }
 
   /**
@@ -832,14 +846,14 @@
   function handleAdvisorQuery(query) {
     appendAdvisorMessage('user', query);
 
-    // Instant context-aware synthesis
+    const s = store.getState();
     const advice = DomainLogic.generateAdvisorReply({
       query,
-      aqi: state.aqi,
-      household: state.household,
-      commute: state.commute,
-      purifier: state.purifier,
-      activeActionIds: state.activeActionIds
+      aqi: s.aqi,
+      household: s.household,
+      commute: s.commute,
+      purifier: s.purifier,
+      activeActionIds: s.activeActionIds
     });
 
     setTimeout(() => {
@@ -848,19 +862,20 @@
   }
 
   // -------------------------------------------------------------
-  // AUTOMATED SELF-TEST & 10,000-ITERATION STRESS SUITE (UI)
+  // 4. AUTOMATED SELF-TEST & 10,000-ITERATION STRESS SUITE (UI)
   // -------------------------------------------------------------
 
   function openTestModal() {
-    state.lastFocusedElement = document.activeElement;
+    store.setState({ lastFocusedElement: document.activeElement });
     DOM.testModal.classList.remove('hidden');
     DOM.modalBtnClose.focus();
   }
 
   function closeTestModal() {
     DOM.testModal.classList.add('hidden');
-    if (state.lastFocusedElement && typeof state.lastFocusedElement.focus === 'function') {
-      state.lastFocusedElement.focus();
+    const lastFocused = store.getState().lastFocusedElement;
+    if (lastFocused && typeof lastFocused.focus === 'function') {
+      lastFocused.focus();
     }
   }
 
@@ -917,21 +932,25 @@
   }
 
   // -------------------------------------------------------------
-  // INITIALIZATION
+  // 5. INITIALIZATION
   // -------------------------------------------------------------
   function init() {
     cacheDom();
     bindEvents();
-    renderAll();
+
+    const initialSnapshot = store.getState();
+    renderMetrics(initialSnapshot);
+    renderChart(initialSnapshot);
+    renderActionCards(initialSnapshot);
 
     // Initial contextual welcome greeting in advisor
     const initialAdvice = DomainLogic.generateAdvisorReply({
       query: 'initial welcome greeting',
-      aqi: state.aqi,
-      household: state.household,
-      commute: state.commute,
-      purifier: state.purifier,
-      activeActionIds: state.activeActionIds
+      aqi: initialSnapshot.aqi,
+      household: initialSnapshot.household,
+      commute: initialSnapshot.commute,
+      purifier: initialSnapshot.purifier,
+      activeActionIds: initialSnapshot.activeActionIds
     });
 
     appendAdvisorMessage('bot', initialAdvice.text, initialAdvice.title, initialAdvice.tags);

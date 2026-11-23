@@ -21,8 +21,8 @@
 
   /**
    * @typedef {Object} WhoGuidelines
-   * @property {number} PM25_24HR - WHO 2021 24-hour mean limit (µg/m³).
-   * @property {number} PM25_ANNUAL - WHO 2021 annual mean limit (µg/m³).
+   * @property {number} PM25_24HR - WHO 2021 24-hour mean limit (15 µg/m³).
+   * @property {number} PM25_ANNUAL - WHO 2021 annual mean limit (5 µg/m³).
    */
 
   /**
@@ -81,7 +81,7 @@
    * @property {'routines'|'iaq'|'community'} track - Action track key.
    * @property {string} title - Action title.
    * @property {string} tag - Classification tag.
-   * @property {Array<string>} targetHousehold - Applicable household profile IDs.
+   * @property {readonly string[]} targetHousehold - Applicable household profile IDs.
    * @property {number} minAqiThreshold - Minimum AQI for proactive recommendation.
    * @property {string} directImpact - Plain-language direct impact summary.
    * @property {string} scientificEvidence - Grounded scientific citation or study.
@@ -127,8 +127,8 @@
    * @typedef {Object} AdvisorResponse
    * @property {string} title - Advisory card header title.
    * @property {string} text - Quantified, context-specific markdown advice.
-   * @property {Array<string>} tags - Metadata chips for categorization.
-   * @property {Array<string>} suggestedActions - Action catalog IDs recommended for adoption.
+   * @property {string[]} tags - Metadata chips for categorization.
+   * @property {string[]} suggestedActions - Action catalog IDs recommended for adoption.
    */
 
   // -------------------------------------------------------------
@@ -146,14 +146,14 @@
       none_diy: 0.85
     }),
 
-    // Residual particulate multiplier for adopted active filtration (1 - fractional reduction)
+    // Residual particulate multipliers for active interventions (1 - fractional reduction)
     RESIDUAL_FACTORS: Object.freeze({
-      TRUE_HEPA: 0.42,       // NIH RAPIDS clinical trial: 58% reduction
-      CORSI_ROSENTHAL: 0.50, // UC Davis DIY box fan CADR evaluation: 50% reduction
-      SPLIT_AC_COARSE: 0.80, // Coarse pre-filter recirculation only
-      DOOR_SEALING: 0.82,    // Infiltration barrier: 18% reduction
-      WET_MOPPING: 0.88,     // Resuspension prevention: 12% reduction
-      SOURCE_CONTROL: 0.85   // Kitchen extraction / induction: 15% reduction
+      TRUE_HEPA: 0.42,       // NIH RAPIDS trial PMC7021209: 58% drop in personal PM2.5
+      CORSI_ROSENTHAL: 0.50, // UC Davis DIY box fan CADR evaluation: 50% drop
+      SPLIT_AC_COARSE: 0.80, // Coarse pre-filter recirculation
+      DOOR_SEALING: 0.82,    // Infiltration weatherstripping: 18% drop
+      WET_MOPPING: 0.88,     // Resuspension prevention: 12% drop
+      SOURCE_CONTROL: 0.85   // Kitchen extraction / induction: 15% drop
     }),
 
     // Indoor source spikes in µg/m³
@@ -299,7 +299,7 @@
         track: 'routines',
         title: 'Shift Outdoors to 1:00–4:00 PM Mixing Window',
         tag: 'Thermal Inversion Bypass',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters']),
         minAqiThreshold: 100,
         directImpact: 'Avoids nocturnal and morning temperature inversion that traps heavy toxic smog near ground level.',
         scientificEvidence: 'Planetary boundary layer height expands up to 1,200m in afternoon sun vs <150m at dawn, diluting surface pollutant concentration by 35–45%.',
@@ -311,7 +311,7 @@
         track: 'routines',
         title: 'Fit-Tested Headband N95 / FFP2 Masking',
         tag: 'Personal Respiratory Barrier',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters', 'rwa_leads'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters', 'rwa_leads']),
         minAqiThreshold: 120,
         directImpact: 'Stops fine respirable particulates (PM2.5 & ultrafine soot) from penetrating deep alveolar lung tissue.',
         scientificEvidence: 'Dual-strap headband N95 delivers 95%+ filtration; loose surgical masks and cloth bandanas suffer 60–80% inward leakage due to perimeter gaps.',
@@ -323,7 +323,7 @@
         track: 'routines',
         title: 'Consolidate & Batch Weekly Errand Trips',
         tag: 'Cold-Start Reduction',
-        targetHousehold: ['commuters', 'families_kids'],
+        targetHousehold: Object.freeze(['commuters', 'families_kids']),
         minAqiThreshold: 150,
         directImpact: 'Cuts repetitive cold-start vehicle tailpipe bursts and reduces your direct roadside exposure window.',
         scientificEvidence: 'Vehicular catalytic converters require 5–10 mins to reach 300°C operating temp. Combining 4 short errands into one single warm trip cuts hydrocarbon & PM emissions by up to 60%.',
@@ -335,7 +335,7 @@
         track: 'routines',
         title: 'Post-Commute Airway Hygiene & Decontamination',
         tag: 'Particle Cleansing',
-        targetHousehold: ['commuters', 'families_kids'],
+        targetHousehold: Object.freeze(['commuters', 'families_kids']),
         minAqiThreshold: 180,
         directImpact: 'Washes away deposited toxic heavy metals and soot from nasal lining, eyes, and skin immediately after returning home.',
         scientificEvidence: 'Isotonic saline nasal irrigation flushes trapped particulate matter from upper mucosal pathways, halving inflammatory cytokine cascades.',
@@ -347,7 +347,7 @@
         track: 'routines',
         title: 'Suspend Pre-10:00 AM Outdoor Endurance Cardio',
         tag: 'Cardiovascular Defense',
-        targetHousehold: ['seniors_multi', 'families_kids'],
+        targetHousehold: Object.freeze(['seniors_multi', 'families_kids']),
         minAqiThreshold: 150,
         directImpact: 'Prevents acute cardiopulmonary spikes caused by deep mouth-breathing during peak dawn pollution.',
         scientificEvidence: 'Cardio exercise increases minute ventilation by 5–10x, driving toxic ultrafine particles directly into systemic circulation.',
@@ -361,7 +361,7 @@
         track: 'iaq',
         title: 'Continuous Bedroom True-HEPA (H13/H14) Filtration',
         tag: 'NIH RAPIDS Protocol',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters', 'rwa_leads'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters', 'rwa_leads']),
         minAqiThreshold: 100,
         directImpact: 'Maintains an indoor safe haven with sub-15 µg/m³ PM2.5 in closed bedrooms overnight.',
         scientificEvidence: 'Randomized clinical trials (NIH RAPIDS study) documented a 53% to 60% sustained drop in personal PM2.5 exposure and immediate reduction in systemic arterial stiffness.',
@@ -373,7 +373,7 @@
         track: 'iaq',
         title: 'Budget DIY Corsi-Rosenthal Box-Fan Assembly',
         tag: 'Affordable High-CADR',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters', 'rwa_leads'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters', 'rwa_leads']),
         minAqiThreshold: 120,
         directImpact: 'Delivers industrial-grade Clean Air Delivery Rate (CADR ~350-450 CFM) for large rooms at 1/5th commercial purifier cost.',
         scientificEvidence: 'UC Davis engineering evaluations show a 4-filter MERV-13 cube fan matches commercial HEPA CADR while drawing under 60 watts of power.',
@@ -385,7 +385,7 @@
         track: 'iaq',
         title: 'Kitchen Source Control & Induction Cooking Transition',
         tag: 'Zero Indoor NO2',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters']),
         minAqiThreshold: 80,
         directImpact: 'Eliminates dangerous indoor spikes of nitrogen dioxide (NO2), acrolein, and ultrafine cooking aerosols.',
         scientificEvidence: 'LPG gas burners emit up to 400 ppb NO2 during frying, surpassing WHO 1-hour limits within 10 minutes. Induction cooktops generate zero combustion byproducts.',
@@ -397,7 +397,7 @@
         track: 'iaq',
         title: 'Microfiber Wet Mopping & Resuspension Ban',
         tag: 'EPA IAQ Standard',
-        targetHousehold: ['families_kids', 'seniors_multi'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi']),
         minAqiThreshold: 100,
         directImpact: 'Captures settled toxic dust without kicking particles back into breathing zones via dry broom sweeping.',
         scientificEvidence: 'EPA IAQ studies indicate dry sweeping resuspends up to 70% of settled coarse and fine PM into the air, whereas damp microfiber binds electrostatic particles safely.',
@@ -409,7 +409,7 @@
         track: 'iaq',
         title: 'Perimeter Weatherstripping & Door Sweep Sealing',
         tag: 'Infiltration Barrier',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters']),
         minAqiThreshold: 150,
         directImpact: 'Seals drafts around entry doors and window frames to block smog infiltration into living areas.',
         scientificEvidence: 'Unsealed building envelopes experience an ambient air exchange infiltration rate of 0.8–1.2 ACH. Silicone draft seals cut passive PM2.5 infiltration by 25–35%.',
@@ -421,7 +421,7 @@
         track: 'iaq',
         title: 'Strict Ban on Incense, Scented Candles & Coils',
         tag: 'Zero Indoor Smoke',
-        targetHousehold: ['families_kids', 'seniors_multi', 'commuters', 'rwa_leads'],
+        targetHousehold: Object.freeze(['families_kids', 'seniors_multi', 'commuters', 'rwa_leads']),
         minAqiThreshold: 80,
         directImpact: 'Removes massive indoor carcinogen sources that can elevate indoor PM2.5 past 500 µg/m³.',
         scientificEvidence: 'A single burning mosquito coil emits PM2.5 particulate mass equivalent to burning 75 to 100 commercial cigarettes, releasing formaldehyde and benzene.',
@@ -435,7 +435,7 @@
         track: 'community',
         title: 'School-Gate & Community Zero-Idling Pledge',
         tag: 'Child Micro-Environment',
-        targetHousehold: ['families_kids', 'rwa_leads'],
+        targetHousehold: Object.freeze(['families_kids', 'rwa_leads']),
         minAqiThreshold: 100,
         directImpact: 'Prevents heavy benzene, carbon monoxide, and black carbon accumulation outside school pickup gates.',
         scientificEvidence: 'Vehicle tailpipes idle at breathing height for children. Anti-idling enforcement drops localized gate PM2.5 concentrations by 38% during dismissal peaks.',
@@ -447,7 +447,7 @@
         track: 'community',
         title: 'Neighborhood Leaf Composting Pits vs. Open Burning',
         tag: 'Biomass Burning Ban',
-        targetHousehold: ['rwa_leads', 'seniors_multi', 'families_kids'],
+        targetHousehold: Object.freeze(['rwa_leads', 'seniors_multi', 'families_kids']),
         minAqiThreshold: 120,
         directImpact: 'Halts illegal garden waste and dry leaf burning that poisons local colony air every evening.',
         scientificEvidence: 'Open leaf smoldering produces severe toxic smoke high in benzo(a)pyrene and furans. Converting dry waste into aerated compost creates nutrient-rich soil with zero smoke.',
@@ -459,7 +459,7 @@
         track: 'community',
         title: 'Metro / EV Shared Transit Transition',
         tag: 'Clean Mobility Shift',
-        targetHousehold: ['commuters', 'families_kids', 'rwa_leads'],
+        targetHousehold: Object.freeze(['commuters', 'families_kids', 'rwa_leads']),
         minAqiThreshold: 100,
         directImpact: 'Removes personal combustion vehicles from congested corridors and shrinks individual carbon footprint.',
         scientificEvidence: 'Switching a 20 km daily roundtrip commute from single-occupancy petrol car to electric metro eliminates ~3.8 to 4.5 kg CO2e and 12g fine exhaust particulate per person.',
@@ -471,7 +471,7 @@
         track: 'community',
         title: 'Electric Radiant Heating for Society Night Guards',
         tag: 'Humanitarian & Clean Air',
-        targetHousehold: ['rwa_leads', 'seniors_multi'],
+        targetHousehold: Object.freeze(['rwa_leads', 'seniors_multi']),
         minAqiThreshold: 150,
         directImpact: 'Eliminates roadside scrap-plastic and wood fires that guards burn during freezing night shifts to survive.',
         scientificEvidence: 'Burning scrap plastic/rubber releases dioxins, hydrochloric acid, and extreme ultrafine soot right next to society entry gates. Electric infrared heaters consume minimal power with zero emissions.',
@@ -483,7 +483,7 @@
         track: 'community',
         title: 'Green Mesh Barrier & Construction Mist Protocols',
         tag: 'Fugitive Dust Control',
-        targetHousehold: ['rwa_leads', 'commuters'],
+        targetHousehold: Object.freeze(['rwa_leads', 'commuters']),
         minAqiThreshold: 120,
         directImpact: 'Prevents cement silica and pulverized road dust from drifting into residential apartments.',
         scientificEvidence: 'Continuous fine water misting and dual-layer geotextile windbreaks capture up to 80% of fugitive PM10 and PM2.5 at civil renovation sites.',
@@ -543,193 +543,150 @@
   };
 
   // -------------------------------------------------------------
-  // 3. ADVISOR INTENT HANDLERS (Modular Single-Responsibility Helpers)
+  // 3. DECLARATIVE ADVISOR INTENT ENGINE
   // -------------------------------------------------------------
 
   /**
-   * Generates advice for outdoor activity, exercise, and diurnal inversion window.
-   * @private
-   * @param {number} aqi
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {string} whoMultiple
-   * @param {HouseholdProfile} household
-   * @returns {AdvisorResponse}
+   * Declarative intent registry for the GenAI Advisor.
+   * Enables clean intent matching, priority routing, and testability.
+   * @type {Array<{ id: string, matches: (q: string) => boolean, handle: (ctx: Object) => AdvisorResponse }>}
    */
-  function handleOutdoorIntent(aqi, cat, pm25, whoMultiple, household) {
-    const title = 'Outdoor Window & Inversion Advisory';
-    const tags = [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel];
+  const INTENT_REGISTRY = Object.freeze([
+    {
+      id: 'outdoor_inversion',
+      matches: (q) => q.includes('outdoor') || q.includes('play') || q.includes('child') ||
+                      q.includes('walk') || q.includes('run') || q.includes('exercise') || q.includes('morning'),
+      handle: (ctx) => {
+        const { aqi, cat, pm25, whoMultiple, household } = ctx;
+        const title = 'Outdoor Window & Inversion Advisory';
+        const tags = [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel];
 
-    if (aqi >= 300) {
-      return {
-        title,
-        text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit). Under thermal inversion, a cold stagnant air pocket traps toxic combustion soot close to ground level until midday.\n\n` +
-          `**Direct Recommendation for ${household.label}:**\n` +
-          `• **Cancel all morning outdoor cardio & child sports before 12:00 PM.** Immature lungs and cardiac systems take in 5-10x more particulate mass per minute during physical exertion.\n` +
-          `• **Optimal Outdoor Window:** If strictly necessary, restrict movement to **1:00 PM – 3:30 PM**, when solar heating raises the planetary boundary layer height (up to 1,200m) and dilutes surface particulate concentrations by ~40%.\n` +
-          `• **Mandatory Protection:** Ensure dual-strap headband N95/FFP2 masks are fitted tightly around the nasal bridge before stepping outside.`,
-        tags,
-        suggestedActions: ['routine_mixing_window', 'routine_masking_n95', 'routine_morning_inversion']
-      };
+        if (aqi >= 300) {
+          return {
+            title,
+            text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit). Under thermal inversion, a cold stagnant air pocket traps toxic combustion soot close to ground level until midday.\n\n` +
+              `**Direct Recommendation for ${household.label}:**\n` +
+              `• **Cancel all morning outdoor cardio & child sports before 12:00 PM.** Immature lungs and cardiac systems take in 5-10x more particulate mass per minute during physical exertion.\n` +
+              `• **Optimal Outdoor Window:** If strictly necessary, restrict movement to **1:00 PM – 3:30 PM**, when solar heating raises the planetary boundary layer height (up to 1,200m) and dilutes surface particulate concentrations by ~40%.\n` +
+              `• **Mandatory Protection:** Ensure dual-strap headband N95/FFP2 masks are fitted tightly around the nasal bridge before stepping outside.`,
+            tags,
+            suggestedActions: ['routine_mixing_window', 'routine_masking_n95', 'routine_morning_inversion']
+          };
+        }
+
+        if (aqi >= 150) {
+          return {
+            title,
+            text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³**.\n\n` +
+              `• **Targeted Window:** The safest period for light outdoor activity is between **1:00 PM and 4:00 PM** when vertical atmospheric mixing peaks.\n` +
+              `• Avoid high-traffic corridors and early morning fog/haze. For ${household.label}, keep sustained cardio exercises indoors.`,
+            tags,
+            suggestedActions: ['routine_mixing_window', 'routine_masking_n95']
+          };
+        }
+
+        return {
+          title,
+          text: `**Current Status:** AQI is **${aqi} (${cat.label})**, PM2.5 is **${pm25} µg/m³**.\n\n` +
+            `• Outdoor exposure risks are moderate. Children and seniors can enjoy outdoor activities, ideally avoiding peak commute traffic hours (8:00–10:00 AM and 6:00–8:00 PM).`,
+          tags,
+          suggestedActions: ['routine_errand_batching']
+        };
+      }
+    },
+    {
+      id: 'purifier_corsi',
+      matches: (q) => q.includes('corsi') || q.includes('diy') || q.includes('box fan') ||
+                      q.includes('purifier') || q.includes('hepa') || q.includes('merv'),
+      handle: (ctx) => {
+        const { purifier, cat, pm25, household } = ctx;
+        return {
+          title: 'DIY Corsi-Rosenthal Box vs. HEPA Filtration',
+          text: `**Filtration Engineering Guide:**\n\n` +
+            `• **What is a Corsi-Rosenthal (C-R) Box?** It is an open-source, high Clean Air Delivery Rate (CADR ~350-450 CFM) air cleaner built using a 20-inch box fan and 4x MERV-13 pleated HVAC filters taped into a sealed cube, with a cardboard shroud.\n` +
+            `• **Cost & Performance:** Commercial True-HEPA purifiers cost ₹10,000–₹25,000 with expensive replacement cartridges. A C-R box costs ₹2,500–₹3,800 to build and cleans large 400 sq.ft rooms within 20 minutes.\n` +
+            `• **Setup Status:** Your active setup is **${purifier.label}**.\n` +
+            `• **NIH RAPIDS Clinical Evidence:** Continuous HEPA filtration achieves a **53% to 60% reduction in personal PM2.5 exposure**, reducing blood pressure and arterial stiffness in smog-exposed populations.\n` +
+            `• **Actionable Hack:** Place purifiers away from room corners, at least 1.5 feet from walls, and operate them on medium/high rather than auto-mode during peak inversion nights.`,
+          tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+          suggestedActions: ['iaq_true_hepa', 'iaq_corsi_rosenthal', 'iaq_door_sealing']
+        };
+      }
+    },
+    {
+      id: 'cooking_combustion',
+      matches: (q) => q.includes('cook') || q.includes('gas') || q.includes('induction') ||
+                      q.includes('kitchen') || q.includes('incense') || q.includes('candle') ||
+                      q.includes('coil') || q.includes('no2'),
+      handle: (ctx) => {
+        const { cat, pm25, household } = ctx;
+        return {
+          title: 'Indoor Combustion & NO2 Elimination',
+          text: `**Indoor Air Quality Science:**\n\n` +
+            `• **Gas Combustion Danger:** LPG gas cooktops release up to 400 ppb of nitrogen dioxide (NO2) alongside ultrafine aerosols. In closed winter apartments, indoor NO2 regularly exceeds WHO 1-hour safe limits (200 µg/m³).\n` +
+            `• **Cooking Protocols:** Switch to an **induction cooktop** where possible to eliminate combustion emissions. If using gas, turn on the kitchen exhaust hood at high speed 5 minutes *before* lighting the stove and keep it running 5 minutes after.\n` +
+            `• **Strict Smoke Ban:** Never burn incense (agarbatti), scented paraffin candles, or mosquito coils. Burning a single mosquito coil emits PM2.5 equivalent to **75–100 cigarettes**, flooding the room with formaldehyde and acrolein.\n` +
+            `• **Cleaning Protocol:** Replace dry broom sweeping with damp microfiber wet mopping to prevent dust resuspension.`,
+          tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+          suggestedActions: ['iaq_source_control', 'iaq_zero_combustion', 'iaq_wet_mopping']
+        };
+      }
+    },
+    {
+      id: 'respirator_masking',
+      matches: (q) => q.includes('mask') || q.includes('n95') || q.includes('ffp2') ||
+                      q.includes('cloth') || q.includes('surgical'),
+      handle: (ctx) => {
+        const { commute, cat, pm25, household } = ctx;
+        return {
+          title: 'Respirator & Mask Selection Protocol',
+          text: `**Respirator Protection Science:**\n\n` +
+            `• **N95/FFP2 (Dual Headband):** The gold standard for toxic urban smog. Electret meltblown microfiber captures >=95% of 0.3-micron particles.\n` +
+            `• **The Seal Factor:** Earloop masks frequently leak 20–35% around cheeks and jawline under movement. For two-wheeler commuters and walking, choose **headband style** N95s and perform a positive/negative pressure seal check every time.\n` +
+            `• **Cloth & Surgical Masks:** Ineffective against PM2.5. Surgical masks are designed to stop droplet splatter, not fine sub-micron aerosols; inward leakage exceeds 60–80%.\n` +
+            `• **Commute Context:** For your **${commute.label}** mode, masking is vital whenever outdoors or waiting at open transit platforms.`,
+          tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+          suggestedActions: ['routine_masking_n95', 'routine_post_commute']
+        };
+      }
+    },
+    {
+      id: 'community_rwa',
+      matches: (q) => q.includes('rwa') || q.includes('community') || q.includes('leaf') ||
+                      q.includes('burn') || q.includes('guard') || q.includes('idling') || q.includes('school'),
+      handle: (ctx) => {
+        const { household, cat, pm25 } = ctx;
+        return {
+          title: 'RWA & Neighborhood Action Playbook',
+          text: `**Community Smog Mitigation Playbook for ${household.label}:**\n\n` +
+            `1. **Security Guard Heating:** Supply 1,000W electric radiant heaters or warm fleece shelters to security guards. This completely eliminates nightly burning of scrap wood, cardboard, and toxic plastic packaging at colony gates.\n` +
+            `2. **Decentralized Leaf Composting:** Dig or install aerated composting pits for garden sweepings. Open biomass burning emits dense polycyclic aromatic hydrocarbons (PAHs) and creates localized hazardous smog.\n` +
+            `3. **School-Gate Anti-Idling Zone:** Establish a mandatory 3-minute engine shutdown rule within 200 meters of community and school entry gates, reducing toxic micro-environment plumes for waiting students by 38%.\n` +
+            `4. **Dust Suppression:** Mandate green geotextile safety netting and water spray nozzles for any residential construction or masonry work.`,
+          tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+          suggestedActions: ['comm_guard_heaters', 'comm_leaf_composting', 'comm_no_idling', 'comm_dust_mitigation']
+        };
+      }
+    },
+    {
+      id: 'ventilation_timing',
+      matches: (q) => q.includes('window') || q.includes('ventilate') || q.includes('fresh air') ||
+                      q.includes('co2') || q.includes('stale'),
+      handle: (ctx) => {
+        const { cat, pm25, household } = ctx;
+        return {
+          title: 'Winter Smog Ventilation Strategy',
+          text: `**Ventilation Dynamics in Severe Smog:**\n\n` +
+            `• **The Dilemma:** Keeping rooms completely sealed traps metabolic carbon dioxide (CO2 > 1,500 ppm causes headaches and cognitive fatigue), but opening windows admits toxic PM2.5.\n` +
+            `• **The Optimal Solution:** Perform **strategic pulse ventilation** strictly between **1:30 PM and 3:30 PM** for 10–15 minutes, when atmospheric dispersion is highest and outdoor PM2.5 is at its diurnal minimum.\n` +
+            `• **Post-Ventilation Recovery:** Immediately seal doors and windows, and turn your air purifier (or DIY C-R box) to maximum speed for 20 minutes to scrub infiltrated particulate down to safe levels.\n` +
+            `• Install weatherstripping on door gaps to curb passive infiltration during morning and night smog peaks.`,
+          tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+          suggestedActions: ['routine_mixing_window', 'iaq_door_sealing', 'iaq_true_hepa']
+        };
+      }
     }
-
-    if (aqi >= 150) {
-      return {
-        title,
-        text: `**Current Status:** AQI is **${aqi} (${cat.label})** with PM2.5 at **${pm25} µg/m³**.\n\n` +
-          `• **Targeted Window:** The safest period for light outdoor activity is between **1:00 PM and 4:00 PM** when vertical atmospheric mixing peaks.\n` +
-          `• Avoid high-traffic corridors and early morning fog/haze. For ${household.label}, keep sustained cardio exercises indoors.`,
-        tags,
-        suggestedActions: ['routine_mixing_window', 'routine_masking_n95']
-      };
-    }
-
-    return {
-      title,
-      text: `**Current Status:** AQI is **${aqi} (${cat.label})**, PM2.5 is **${pm25} µg/m³**.\n\n` +
-        `• Outdoor exposure risks are moderate. Children and seniors can enjoy outdoor activities, ideally avoiding peak commute traffic hours (8:00–10:00 AM and 6:00–8:00 PM).`,
-      tags,
-      suggestedActions: ['routine_errand_batching']
-    };
-  }
-
-  /**
-   * Generates advice for air purifiers and DIY Corsi-Rosenthal boxes.
-   * @private
-   * @param {PurifierProfile} purifier
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {HouseholdProfile} household
-   * @returns {AdvisorResponse}
-   */
-  function handlePurifierIntent(purifier, cat, pm25, household) {
-    return {
-      title: 'DIY Corsi-Rosenthal Box vs. HEPA Filtration',
-      text: `**Filtration Engineering Guide:**\n\n` +
-        `• **What is a Corsi-Rosenthal (C-R) Box?** It is an open-source, high Clean Air Delivery Rate (CADR ~350-450 CFM) air cleaner built using a 20-inch box fan and 4x MERV-13 pleated HVAC filters taped into a sealed cube, with a cardboard shroud.\n` +
-        `• **Cost & Performance:** Commercial True-HEPA purifiers cost ₹10,000–₹25,000 with expensive replacement cartridges. A C-R box costs ₹2,500–₹3,800 to build and cleans large 400 sq.ft rooms within 20 minutes.\n` +
-        `• **Setup Status:** Your active setup is **${purifier.label}**.\n` +
-        `• **NIH RAPIDS Clinical Evidence:** Continuous HEPA filtration achieves a **53% to 60% reduction in personal PM2.5 exposure**, reducing blood pressure and arterial stiffness in smog-exposed populations.\n` +
-        `• **Actionable Hack:** Place purifiers away from room corners, at least 1.5 feet from walls, and operate them on medium/high rather than auto-mode during peak inversion nights.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['iaq_true_hepa', 'iaq_corsi_rosenthal', 'iaq_door_sealing']
-    };
-  }
-
-  /**
-   * Generates advice for kitchen source extraction and combustion elimination.
-   * @private
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {HouseholdProfile} household
-   * @returns {AdvisorResponse}
-   */
-  function handleCookingIntent(cat, pm25, household) {
-    return {
-      title: 'Indoor Combustion & NO2 Elimination',
-      text: `**Indoor Air Quality Science:**\n\n` +
-        `• **Gas Combustion Danger:** LPG gas cooktops release up to 400 ppb of nitrogen dioxide (NO2) alongside ultrafine aerosols. In closed winter apartments, indoor NO2 regularly exceeds WHO 1-hour safe limits (200 µg/m³).\n` +
-        `• **Cooking Protocols:** Switch to an **induction cooktop** where possible to eliminate combustion emissions. If using gas, turn on the kitchen exhaust hood at high speed 5 minutes *before* lighting the stove and keep it running 5 minutes after.\n` +
-        `• **Strict Smoke Ban:** Never burn incense (agarbatti), scented paraffin candles, or mosquito coils. Burning a single mosquito coil emits PM2.5 equivalent to **75–100 cigarettes**, flooding the room with formaldehyde and acrolein.\n` +
-        `• **Cleaning Protocol:** Replace dry broom sweeping with damp microfiber wet mopping to prevent dust resuspension.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['iaq_source_control', 'iaq_zero_combustion', 'iaq_wet_mopping']
-    };
-  }
-
-  /**
-   * Generates advice for respirator and mask selection.
-   * @private
-   * @param {CommuteProfile} commute
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {HouseholdProfile} household
-   * @returns {AdvisorResponse}
-   */
-  function handleMaskIntent(commute, cat, pm25, household) {
-    return {
-      title: 'Respirator & Mask Selection Protocol',
-      text: `**Respirator Protection Science:**\n\n` +
-        `• **N95/FFP2 (Dual Headband):** The gold standard for toxic urban smog. Electret meltblown microfiber captures >=95% of 0.3-micron particles.\n` +
-        `• **The Seal Factor:** Earloop masks frequently leak 20–35% around cheeks and jawline under movement. For two-wheeler commuters and walking, choose **headband style** N95s and perform a positive/negative pressure seal check every time.\n` +
-        `• **Cloth & Surgical Masks:** Ineffective against PM2.5. Surgical masks are designed to stop droplet splatter, not fine sub-micron aerosols; inward leakage exceeds 60–80%.\n` +
-        `• **Commute Context:** For your **${commute.label}** mode, masking is vital whenever outdoors or waiting at open transit platforms.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['routine_masking_n95', 'routine_post_commute']
-    };
-  }
-
-  /**
-   * Generates advice for community and RWA initiatives.
-   * @private
-   * @param {HouseholdProfile} household
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @returns {AdvisorResponse}
-   */
-  function handleCommunityIntent(household, cat, pm25) {
-    return {
-      title: 'RWA & Neighborhood Action Playbook',
-      text: `**Community Smog Mitigation Playbook for ${household.label}:**\n\n` +
-        `1. **Security Guard Heating:** Supply 1,000W electric radiant heaters or warm fleece shelters to security guards. This completely eliminates nightly burning of scrap wood, cardboard, and toxic plastic packaging at colony gates.\n` +
-        `2. **Decentralized Leaf Composting:** Dig or install aerated composting pits for garden sweepings. Open biomass burning emits dense polycyclic aromatic hydrocarbons (PAHs) and creates localized hazardous smog.\n` +
-        `3. **School-Gate Anti-Idling Zone:** Establish a mandatory 3-minute engine shutdown rule within 200 meters of community and school entry gates, reducing toxic micro-environment plumes for waiting students by 38%.\n` +
-        `4. **Dust Suppression:** Mandate green geotextile safety netting and water spray nozzles for any residential construction or masonry work.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['comm_guard_heaters', 'comm_leaf_composting', 'comm_no_idling', 'comm_dust_mitigation']
-    };
-  }
-
-  /**
-   * Generates advice for window ventilation dynamics.
-   * @private
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {HouseholdProfile} household
-   * @returns {AdvisorResponse}
-   */
-  function handleVentilationIntent(cat, pm25, household) {
-    return {
-      title: 'Winter Smog Ventilation Strategy',
-      text: `**Ventilation Dynamics in Severe Smog:**\n\n` +
-        `• **The Dilemma:** Keeping rooms completely sealed traps metabolic carbon dioxide (CO2 > 1,500 ppm causes headaches and cognitive fatigue), but opening windows admits toxic PM2.5.\n` +
-        `• **The Optimal Solution:** Perform **strategic pulse ventilation** strictly between **1:30 PM and 3:30 PM** for 10–15 minutes, when atmospheric dispersion is highest and outdoor PM2.5 is at its diurnal minimum.\n` +
-        `• **Post-Ventilation Recovery:** Immediately seal doors and windows, and turn your air purifier (or DIY C-R box) to maximum speed for 20 minutes to scrub infiltrated particulate down to safe levels.\n` +
-        `• Install weatherstripping on door gaps to curb passive infiltration during morning and night smog peaks.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['routine_mixing_window', 'iaq_door_sealing', 'iaq_true_hepa']
-    };
-  }
-
-  /**
-   * Generates synthesized general assessment for user profile.
-   * @private
-   * @param {HouseholdProfile} household
-   * @param {CommuteProfile} commute
-   * @param {PurifierProfile} purifier
-   * @param {number} aqi
-   * @param {CpcbBreakpoint} cat
-   * @param {number} pm25
-   * @param {string} whoMultiple
-   * @param {number} activeCount
-   * @returns {AdvisorResponse}
-   */
-  function handleDefaultAssessment(household, commute, purifier, aqi, cat, pm25, whoMultiple, activeCount) {
-    const priorityAdvice = (aqi >= 250)
-      ? 'Emergency barrier protection: seal bedroom windows, run continuous filtration, wear headband N95 outdoors, and restrict travel to the 1–4 PM mixing window.'
-      : 'Source control and lifestyle adaptation: wet mopping, induction cooking, and batching commute trips.';
-
-    return {
-      title: 'Targeted SmogShield Assessment',
-      text: `Based on your profile (**${household.label}**, commuting via **${commute.label}**, with **${purifier.label}**):\n\n` +
-        `• Current Outdoor AQI is **${aqi} (${cat.label})** with PM2.5 of **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit).\n` +
-        `• You have currently adopted **${activeCount} protection actions**.\n` +
-        `• **Priority Focus:** ${priorityAdvice}\n` +
-        `• Explore the recommended action cards below and toggle their checkboxes to simulate your personal PM2.5 exposure reduction and carbon savings in real time.`,
-      tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
-      suggestedActions: ['iaq_true_hepa', 'routine_masking_n95', 'routine_mixing_window']
-    };
-  }
+  ]);
 
   // -------------------------------------------------------------
   // 4. DOMAIN LOGIC MODULE (Pure & Deterministic)
@@ -790,7 +747,7 @@
 
     /**
      * Computes exposure simulation metrics, reductions, and CO2e savings.
-     * Pure function, no DOM dependencies.
+     * Pure function, zero DOM side effects.
      * @param {MetricCalculationParams} params - Calculation input parameters.
      * @returns {ComputedMetrics} Calculated exposure metrics.
      */
@@ -894,8 +851,7 @@
 
     /**
      * Context-Aware GenAI Advisor Engine.
-     * Evaluates query, active profile, and currently active actions to produce
-     * an authoritative, quantified, and context-specific response.
+     * Evaluates query, active profile, and currently active actions via the declarative INTENT_REGISTRY.
      * @param {AdvisorContext} ctx - Context object containing active environmental state.
      * @returns {AdvisorResponse} Structured advisory response.
      */
@@ -914,39 +870,40 @@
 
       const whoMultiple = (pm25 / CONFIG.WHO_GUIDELINES.PM25_24HR).toFixed(1);
 
-      // Route intent via clean single-responsibility helpers
-      if (query.includes('outdoor') || query.includes('play') || query.includes('child') ||
-          query.includes('walk') || query.includes('run') || query.includes('exercise') || query.includes('morning')) {
-        return handleOutdoorIntent(aqi, cat, pm25, whoMultiple, household);
+      const evaluationContext = {
+        query,
+        aqi,
+        pm25,
+        cat,
+        household,
+        commute,
+        purifier,
+        activeIds,
+        whoMultiple
+      };
+
+      // Match intent from registry
+      for (const intent of INTENT_REGISTRY) {
+        if (intent.matches(query)) {
+          return intent.handle(evaluationContext);
+        }
       }
 
-      if (query.includes('corsi') || query.includes('diy') || query.includes('box fan') ||
-          query.includes('purifier') || query.includes('hepa') || query.includes('merv')) {
-        return handlePurifierIntent(purifier, cat, pm25, household);
-      }
+      // Default synthesized assessment
+      const priorityAdvice = (aqi >= 250)
+        ? 'Emergency barrier protection: seal bedroom windows, run continuous filtration, wear headband N95 outdoors, and restrict travel to the 1–4 PM mixing window.'
+        : 'Source control and lifestyle adaptation: wet mopping, induction cooking, and batching commute trips.';
 
-      if (query.includes('cook') || query.includes('gas') || query.includes('induction') ||
-          query.includes('kitchen') || query.includes('incense') || query.includes('candle') ||
-          query.includes('coil') || query.includes('no2')) {
-        return handleCookingIntent(cat, pm25, household);
-      }
-
-      if (query.includes('mask') || query.includes('n95') || query.includes('ffp2') ||
-          query.includes('cloth') || query.includes('surgical')) {
-        return handleMaskIntent(commute, cat, pm25, household);
-      }
-
-      if (query.includes('rwa') || query.includes('community') || query.includes('leaf') ||
-          query.includes('burn') || query.includes('guard') || query.includes('idling') || query.includes('school')) {
-        return handleCommunityIntent(household, cat, pm25);
-      }
-
-      if (query.includes('window') || query.includes('ventilate') || query.includes('fresh air') ||
-          query.includes('co2') || query.includes('stale')) {
-        return handleVentilationIntent(cat, pm25, household);
-      }
-
-      return handleDefaultAssessment(household, commute, purifier, aqi, cat, pm25, whoMultiple, activeIds.size);
+      return {
+        title: 'Targeted SmogShield Assessment',
+        text: `Based on your profile (**${household.label}**, commuting via **${commute.label}**, with **${purifier.label}**):\n\n` +
+          `• Current Outdoor AQI is **${aqi} (${cat.label})** with PM2.5 of **${pm25} µg/m³** (${whoMultiple}x WHO 24h limit).\n` +
+          `• You have currently adopted **${activeIds.size} protection actions**.\n` +
+          `• **Priority Focus:** ${priorityAdvice}\n` +
+          `• Explore the recommended action cards below and toggle their checkboxes to simulate your personal PM2.5 exposure reduction and carbon savings in real time.`,
+        tags: [cat.label, `${pm25} µg/m³ PM2.5`, household.shortLabel],
+        suggestedActions: ['iaq_true_hepa', 'routine_masking_n95', 'routine_mixing_window']
+      };
     }
   };
 
