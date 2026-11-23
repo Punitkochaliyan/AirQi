@@ -68,6 +68,7 @@
     DOM.chartCanvas = document.getElementById('exposure-chart');
     DOM.btnSelectRecommended = document.getElementById('btn-select-recommended');
     DOM.btnResetActions = document.getElementById('btn-reset-actions');
+    DOM.btnPrintPlan = document.getElementById('btn-print-plan');
 
     DOM.tabs = {
       routines: document.getElementById('tab-routines'),
@@ -696,6 +697,12 @@
       state.activeActionIds.clear();
       renderAll();
     });
+
+    if (DOM.btnPrintPlan) {
+      DOM.btnPrintPlan.addEventListener('click', () => {
+        window.print();
+      });
+    }
   }
 
   /**
@@ -724,7 +731,7 @@
   }
 
   /**
-   * Binds modal dialog actions, keyboard escape, and window resizing.
+   * Binds modal dialog actions, keyboard escape, focus trap, and chart resizing.
    * @private
    */
   function bindModalEvents() {
@@ -737,15 +744,47 @@
     DOM.modalBtnDismiss.addEventListener('click', closeTestModal);
     DOM.modalBtnRerun.addEventListener('click', runSelfTestUI);
 
+    // WCAG Compliant Modal Focus Trap & Escape Handling
     DOM.testModal.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         closeTestModal();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = [
+          DOM.modalBtnClose,
+          DOM.testLogContainer,
+          DOM.modalBtnRerun,
+          DOM.modalBtnDismiss
+        ].filter(Boolean);
+
+        if (focusable.length === 0) return;
+
+        const firstEl = focusable[0];
+        const lastEl = focusable[focusable.length - 1];
+
+        if (e.shiftKey && document.activeElement === firstEl) {
+          e.preventDefault();
+          lastEl.focus();
+        } else if (!e.shiftKey && document.activeElement === lastEl) {
+          e.preventDefault();
+          firstEl.focus();
+        }
       }
     });
 
-    window.addEventListener('resize', () => {
-      renderChart();
-    });
+    // High performance ResizeObserver with window resize fallback
+    if (typeof window.ResizeObserver === 'function' && DOM.chartCanvas && DOM.chartCanvas.parentElement) {
+      const resizeObserver = new window.ResizeObserver(() => {
+        renderChart();
+      });
+      resizeObserver.observe(DOM.chartCanvas.parentElement);
+    } else {
+      window.addEventListener('resize', () => {
+        renderChart();
+      });
+    }
   }
 
   /**

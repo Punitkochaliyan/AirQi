@@ -9,7 +9,15 @@ const path = require('path');
 console.log('=== VERIFYING SMOGSHIELD AI APPLICATION SUITE ===');
 
 // 1. Verify files exist
-const requiredFiles = ['index.html', 'style.css', 'app-core.js', 'app.js', 'test-runner.js'];
+const requiredFiles = [
+  'index.html',
+  'style.css',
+  'app-core.js',
+  'app.js',
+  'app-core.d.ts',
+  'package.json',
+  'test-runner.js'
+];
 requiredFiles.forEach(file => {
   const filePath = path.join(__dirname, file);
   if (!fs.existsSync(filePath)) {
@@ -35,6 +43,7 @@ const accessibilityChecks = [
   { desc: 'ARIA live region on AI log', pattern: /role="log"[^>]*aria-live="polite"/ },
   { desc: 'ARIA dialog for test modal', pattern: /role="dialog"[^>]*aria-modal="true"/ },
   { desc: 'Run Checks button', pattern: /id="btn-run-checks"/ },
+  { desc: 'Print Plan button', pattern: /id="btn-print-plan"/ },
   { desc: 'Comparison chart canvas', pattern: /<canvas id="exposure-chart"/ }
 ];
 

@@ -1,0 +1,39 @@
+{
+  "name": "airqi-smogshield-ai",
+  "version": "1.1.0",
+  "description": "Minimalist GenAI Urban Smog Defense and IAQ Exposure Mitigation Engine aligned with CPCB and WHO 2021 guidelines.",
+  "main": "app-core.js",
+  "scripts": {
+    "test": "node test-runner.js",
+    "verify": "node verify-app.js",
+    "test:xss": "node test-xss.js",
+    "ci": "node test-runner.js && node verify-app.js && node test-xss.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Punitkochaliyan/AirQi.git"
+  },
+  "keywords": [
+    "aqi",
+    "cpcb",
+    "who",
+    "air-pollution",
+    "iaq",
+    "hepa",
+    "corsi-rosenthal",
+    "pm25",
+    "smog",
+    "clean-air",
+    "accessibility",
+    "wcag"
+  ],
+  "author": "Punit Kumar <106605862+Punit-kr@users.noreply.github.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Punitkochaliyan/AirQi/issues"
+  },
+  "homepage": "https://github.com/Punitkochaliyan/AirQi#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
